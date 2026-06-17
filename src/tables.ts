@@ -9,41 +9,48 @@ export interface TableAssignment {
   leftoverSeats: number;
 }
 
-export function assignTables(
+export interface AssignTablesOptions {
+  occupiedTableIds?: string[];
+  config?: RestaurantConfig;
+}
+
+function sortBySeatsAsc(tables: Table[]): Table[] {
+  return [...tables].sort((a, b) => a.seats - b.seats);
+}
+
+function assignmentScore(assignment: TableAssignment, partySize: number): number {
+  const tablePenalty = assignment.tables.length * 100;
+  return assignment.leftoverSeats + tablePenalty;
+}
+
+function buildAssignment(tables: Table[], partySize: number): TableAssignment {
+  const totalSeats = tables.reduce((sum, table) => sum + table.seats, 0);
+  return {
+    tables,
+    leftoverSeats: totalSeats - partySize,
+  };
+}
+
+function assignSingleTable(
   partySize: number,
-  occupiedTableIds: string[] = [],
-  config: RestaurantConfig = DEFAULT_RESTAURANT_CONFIG
+  freeTables: Table[]
 ): TableAssignment | null {
-  const freeTables = config.tables.filter(
-    (table) => !occupiedTableIds.includes(table.id)
+  const options = sortBySeatsAsc(freeTables).filter(
+    (table) => table.seats >= partySize
   );
 
-  if (freeTables.length === 0 || partySize <= 0) {
+  if (options.length === 0) {
     return null;
   }
 
-  if (!config.allowTableSplitting) {
-    const fit = [...freeTables]
-      .sort((a, b) => a.seats - b.seats)
-      .find((table) => table.seats >= partySize);
+  return buildAssignment([options[0]], partySize);
+}
 
-    if (!fit) {
-      return null;
-    }
-
-    return { tables: [fit], leftoverSeats: fit.seats - partySize };
-  }
-
-  const singleOptions = freeTables
-    .filter((table) => table.seats >= partySize)
-    .sort((a, b) => a.seats - b.seats);
-
-  if (singleOptions.length > 0) {
-    const best = singleOptions[0];
-    return { tables: [best], leftoverSeats: best.seats - partySize };
-  }
-
-  const sorted = [...freeTables].sort((a, b) => a.seats - b.seats);
+function assignGreedyMultiTable(
+  partySize: number,
+  freeTables: Table[]
+): TableAssignment | null {
+  const sorted = sortBySeatsAsc(freeTables);
   const assigned: Table[] = [];
   let remaining = partySize;
 
@@ -65,11 +72,58 @@ export function assignTables(
       return null;
     }
     assigned.push(extra);
-    remaining = 0;
   }
 
-  const totalSeats = assigned.reduce((sum, table) => sum + table.seats, 0);
-  return { tables: assigned, leftoverSeats: totalSeats - partySize };
+  return buildAssignment(assigned, partySize);
+}
+
+export function assignTablesGreedy(
+  partySize: number,
+  freeTables: Table[],
+  allowTableSplitting: boolean
+): TableAssignment | null {
+  if (partySize <= 0 || freeTables.length === 0) {
+    return null;
+  }
+
+  if (!allowTableSplitting) {
+    return assignSingleTable(partySize, freeTables);
+  }
+
+  const single = assignSingleTable(partySize, freeTables);
+  const multi = assignGreedyMultiTable(partySize, freeTables);
+
+  if (single && multi) {
+    return assignmentScore(single, partySize) <= assignmentScore(multi, partySize)
+      ? single
+      : multi;
+  }
+
+  return single ?? multi;
+}
+
+export function assignTables(
+  partySize: number,
+  occupiedTableIds: string[] = [],
+  config: RestaurantConfig = DEFAULT_RESTAURANT_CONFIG
+): TableAssignment | null {
+  const freeTables = config.tables.filter(
+    (table) => !occupiedTableIds.includes(table.id)
+  );
+
+  return assignTablesGreedy(
+    partySize,
+    freeTables,
+    config.allowTableSplitting
+  );
+}
+
+export function assignTablesWithOptions(
+  partySize: number,
+  options: AssignTablesOptions = {}
+): TableAssignment | null {
+  const config = options.config ?? DEFAULT_RESTAURANT_CONFIG;
+  return assignTables(partySize, options.occupiedTableIds ?? [], config);
 }
 
 export function formatTableAssignment(assignment: TableAssignment): string {
