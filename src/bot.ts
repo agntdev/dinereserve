@@ -31,6 +31,7 @@ import {
   PARTY_SIZE_PROMPT,
   startOfDay,
 } from "./reserve.js";
+import { registerBookingsTodayHandlers } from "./admin/bookings-today.js";
 import { registerSetupHandlers } from "./admin/setup.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
@@ -402,6 +403,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   });
 
   registerSetupHandlers(bot);
+  registerBookingsTodayHandlers(bot);
   registerReminderHandlers(bot, getBookingPool);
 
   bot.command("__harness_error__", async () => {
