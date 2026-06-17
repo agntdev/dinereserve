@@ -11,3 +11,13 @@ export interface BookingRow {
   created_at: Date;
   reminder_sent_at: Date | null;
 }
+
+export interface ConfigRow {
+  key: string;
+  value: string;
+}
+
+export interface TableRow {
+  id: string;
+  capacity: number;
+}

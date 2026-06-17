@@ -1,9 +1,8 @@
 import type { Context } from "grammy";
 import type { SessionFlavor } from "grammy";
 import { createBot } from "./toolkit/index.js";
-import { listOverlapping } from "./db/repository.js";
+import { listOverlapping, loadRestaurantConfig } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
-import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
 import { persistBooking } from "./booking.js";
 
 export interface Session {
@@ -188,7 +187,9 @@ async function showAvailabilityForParty(
   partySize: number,
   reservationDate: string,
 ): Promise<TimeSlot[]> {
-  const allSlots = generateSlotsForDate(reservationDate, DEFAULT_RESTAURANT_CONFIG);
+  const config = await loadRestaurantConfig();
+
+  const allSlots = generateSlotsForDate(reservationDate, config);
 
   const overlapping = await listOverlapping(
     reservationDate,
@@ -198,5 +199,5 @@ async function showAvailabilityForParty(
 
   return calculateAvailability(partySize, overlapping, {
     isoDate: reservationDate,
-  });
+  }, config);
 }
