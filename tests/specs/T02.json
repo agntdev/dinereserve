@@ -1,0 +1,66 @@
+[
+  {
+    "name": "T02: /start shows welcome and main menu",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Welcome to DineReserve! 🍽️\n\nI help you book tables at our restaurant. Choose an option below:",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [{ "text": "📅 Make a Reservation", "callback_data": "menu:reserve" }],
+                  [{ "text": "ℹ️ Help", "callback_data": "menu:help" }]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: reserve menu button routes to reservation",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "menu:reserve", "messageId": 1 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Send /reserve to start booking a table."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: help menu button shows help",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "menu:help", "messageId": 1 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Available commands:\n/start — Main menu\n/reserve — Book a table\n/help — Show this help"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]
