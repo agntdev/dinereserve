@@ -1,15 +1,24 @@
 import { createBot, session, type BotContext } from "@agntdev/bot-toolkit";
 import type { Context } from "grammy";
 import {
+  calculateAvailability,
+  formatAvailabilitySummary,
+} from "./availability.js";
+import {
   buildCalendarKeyboard,
+  buildPartySizeKeyboard,
   formatSelectedDate,
   parseMonthKey,
+  parsePartySizeInput,
+  PARTY_SIZE_PROMPT,
   startOfDay,
 } from "./reserve.js";
 
 interface SessionData extends Record<string, unknown> {
   startedAt?: number;
   reservationDate?: string;
+  partySize?: number;
+  awaitingPartySize?: boolean;
 }
 
 const WELCOME_TEXT =
@@ -70,6 +79,38 @@ async function sendCalendar(
   });
 }
 
+async function showAvailabilityForParty(
+  ctx: BotContext,
+  partySize: number,
+  editMessage: boolean
+): Promise<void> {
+  const reservationDate =
+    typeof ctx.session.reservationDate === "string"
+      ? ctx.session.reservationDate
+      : undefined;
+  if (!reservationDate) {
+    if (editMessage) {
+      await ctx.editMessageText("Please pick a date first with /reserve.");
+    } else {
+      await ctx.reply("Please pick a date first with /reserve.");
+    }
+    return;
+  }
+
+  ctx.session.partySize = partySize;
+  ctx.session.awaitingPartySize = false;
+
+  const dateLabel = formatSelectedDate(reservationDate);
+  const result = calculateAvailability(partySize);
+  const summary = formatAvailabilitySummary(partySize, dateLabel, result);
+
+  if (editMessage) {
+    await ctx.editMessageText(summary);
+  } else {
+    await ctx.reply(summary);
+  }
+}
+
 export function buildBot(token: string): ReturnType<typeof createBot> {
   const bot = createBot({ token });
 
@@ -87,6 +128,8 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   bot.command("reserve", async (ctx: BotContext) => {
     const today = todayUtc();
     ctx.session.reservationDate = undefined;
+    ctx.session.partySize = undefined;
+    ctx.session.awaitingPartySize = false;
     await sendCalendar(ctx, today.getUTCFullYear(), today.getUTCMonth());
   });
 
@@ -129,10 +172,15 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     if (data.startsWith("cal:date:")) {
       const isoDate = data.slice("cal:date:".length);
       ctx.session.reservationDate = isoDate;
+      ctx.session.partySize = undefined;
+      ctx.session.awaitingPartySize = false;
       await ctx.editMessageText(
         `Date selected: ${formatSelectedDate(isoDate)}`
       );
       await ctx.answerCallbackQuery({ text: "Date saved" });
+      await ctx.reply(PARTY_SIZE_PROMPT, {
+        reply_markup: buildPartySizeKeyboard(),
+      });
       return;
     }
 
@@ -149,9 +197,44 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     await ctx.answerCallbackQuery();
   });
 
-  bot.on("message", async (ctx: Context) => {
+  bot.callbackQuery(/^party:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data === "party:type") {
+      ctx.session.awaitingPartySize = true;
+      await ctx.editMessageText("Type the number of guests (1-99):");
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const size = Number.parseInt(data.split(":")[1] ?? "", 10);
+    if (!Number.isFinite(size) || size < 1) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    await showAvailabilityForParty(ctx, size, true);
+    await ctx.answerCallbackQuery({ text: "Checking availability" });
+  });
+
+  bot.on("message", async (ctx: BotContext) => {
     const text = ctx.message?.text;
     if (!text) {
+      return;
+    }
+
+    if (ctx.session.awaitingPartySize) {
+      const size = parsePartySizeInput(text);
+      if (size === null) {
+        await ctx.reply("Please enter a whole number between 1 and 99.");
+        return;
+      }
+
+      await showAvailabilityForParty(ctx, size, false);
       return;
     }
 
