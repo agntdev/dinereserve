@@ -1,0 +1,121 @@
+[
+  {
+    "name": "/reserve asks for a date",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "entering a valid date asks for party size",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      },
+      {
+        "send": { "text": "2026-12-25" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "How many people? Please enter the party size (e.g. 2):" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "entering a party size shows available slots",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      },
+      {
+        "send": { "text": "2026-12-25" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "How many people? Please enter the party size (e.g. 2):" } }
+        ]
+      },
+      {
+        "send": { "text": "2" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Available slots for 2 people on 2026-12-25:\n\n1. 11:00–11:30 (12 seats left)\n2. 11:30–12:00 (12 seats left)\n3. 12:00–12:30 (12 seats left)\n4. 12:30–13:00 (12 seats left)\n5. 13:00–13:30 (12 seats left)\n6. 13:30–14:00 (12 seats left)\n7. 14:00–14:30 (12 seats left)\n8. 14:30–15:00 (12 seats left)\n9. 15:00–15:30 (12 seats left)\n10. 15:30–16:00 (12 seats left)\n11. 16:00–16:30 (12 seats left)\n12. 16:30–17:00 (12 seats left)\n13. 17:00–17:30 (12 seats left)\n14. 17:30–18:00 (12 seats left)\n15. 18:00–18:30 (12 seats left)\n16. 18:30–19:00 (12 seats left)\n17. 19:00–19:30 (12 seats left)\n18. 19:30–20:00 (12 seats left)\n19. 20:00–20:30 (12 seats left)\n20. 20:30–21:00 (12 seats left)\n21. 21:00–21:30 (12 seats left)\n22. 21:30–22:00 (12 seats left)\n\nPlease reply with the slot number to confirm (e.g. 1)." } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "entering an invalid date shows error",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      },
+      {
+        "send": { "text": "not-a-date" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Please enter a valid date in YYYY-MM-DD format (e.g. 2026-06-20):" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "entering a past date shows error",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      },
+      {
+        "send": { "text": "2020-01-01" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "You can't book in the past. Please enter a future date (YYYY-MM-DD):" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "entering zero party size shows error",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):" } }
+        ]
+      },
+      {
+        "send": { "text": "2026-12-25" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "How many people? Please enter the party size (e.g. 2):" } }
+        ]
+      },
+      {
+        "send": { "text": "0" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Please enter a valid party size between 1 and 20:" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/start still works after /reserve flow changes",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Welcome! I am ready to help." } }
+        ]
+      }
+    ]
+  }
+]
