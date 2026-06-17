@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Bot responds to any message",
+    "steps": [
+      {
+        "input": {
+          "type": "message",
+          "text": "Hello"
+        },
+        "expected": {
+          "type": "message",
+          "text": "Welcome to DineReserve! I help you book tables at our restaurant.\n\nUse /reserve to make a reservation."
+        }
+      }
+    ]
+  }
+]
