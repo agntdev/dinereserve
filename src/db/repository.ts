@@ -24,8 +24,7 @@ export async function listOverlapping(
 ): Promise<BookingRow[]> {
   const pool = getBookingPool();
   if (!pool) {
-    console.warn("No DATABASE_URL set — cannot query overlapping bookings");
-    return [];
+    throw new Error("No DATABASE_URL set — cannot query overlapping bookings");
   }
 
   const result = await pool.query<Record<string, unknown>>(

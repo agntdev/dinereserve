@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
 import type { SessionFlavor } from "grammy";
 import { createBot } from "./toolkit/index.js";
+import type { BookingRow } from "./db/types.js";
 import { listOverlapping } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
 import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
@@ -190,11 +191,16 @@ async function showAvailabilityForParty(
 ): Promise<TimeSlot[]> {
   const allSlots = generateSlotsForDate(reservationDate, DEFAULT_RESTAURANT_CONFIG);
 
-  const overlapping = await listOverlapping(
-    reservationDate,
-    allSlots[0]?.start ?? "00:00",
-    allSlots[allSlots.length - 1]?.end ?? "23:59",
-  );
+  let overlapping: BookingRow[];
+  try {
+    overlapping = await listOverlapping(
+      reservationDate,
+      allSlots[0]?.start ?? "00:00",
+      allSlots[allSlots.length - 1]?.end ?? "23:59",
+    );
+  } catch {
+    overlapping = [];
+  }
 
   return calculateAvailability(partySize, overlapping, {
     isoDate: reservationDate,
