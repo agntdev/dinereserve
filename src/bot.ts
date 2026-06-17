@@ -40,6 +40,7 @@ import {
   notifyAdminsOfReschedule,
 } from "./admin/notifications.js";
 import { registerSetupHandlers } from "./admin/setup.js";
+import { registerConfigHandlers, handleConfigMessage } from "./admin/config.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
 import {
@@ -423,6 +424,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   });
 
   registerSetupHandlers(bot);
+  registerConfigHandlers(bot);
   registerBookingsTodayHandlers(bot);
   registerBookingsHandlers(bot);
   registerCapacityTodayHandlers(bot);
@@ -705,6 +707,10 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   bot.on("message", async (ctx: BotContext) => {
     const text = ctx.message?.text;
     if (!text) {
+      return;
+    }
+
+    if (await handleConfigMessage(ctx)) {
       return;
     }
 
