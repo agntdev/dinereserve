@@ -33,6 +33,7 @@ import {
 } from "./reserve.js";
 import { registerBookingsHandlers } from "./admin/bookings.js";
 import { registerBookingsTodayHandlers } from "./admin/bookings-today.js";
+import { registerCapacityTodayHandlers } from "./admin/capacity-today.js";
 import {
   notifyAdminsOfCancellation,
   notifyAdminsOfNewBooking,
@@ -424,6 +425,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   registerSetupHandlers(bot);
   registerBookingsTodayHandlers(bot);
   registerBookingsHandlers(bot);
+  registerCapacityTodayHandlers(bot);
   registerReminderHandlers(bot, getBookingPool);
 
   bot.command("__harness_error__", async () => {
