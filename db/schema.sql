@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     status IN ('confirmed', 'cancelled', 'rescheduled', 'no-show')
   ),
   assigned_tables JSONB NOT NULL DEFAULT '[]'::jsonb,
+  reminder_sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (end_dt > start_dt)
