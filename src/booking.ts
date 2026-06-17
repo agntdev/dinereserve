@@ -152,3 +152,75 @@ export function buildGuestSkipKeyboard(): {
     inline_keyboard: [[{ text: "Skip", callback_data: "guest:skip" }]],
   };
 }
+
+export function buildBookingActionKeyboard(refCode: string): {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+} {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Reschedule", callback_data: `booking:reschedule:${refCode}` },
+        { text: "Cancel booking", callback_data: `booking:cancel:${refCode}` },
+      ],
+    ],
+  };
+}
+
+export function buildCancelConfirmKeyboard(refCode: string): {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+} {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Yes, cancel", callback_data: `booking:cancel:yes:${refCode}` },
+        { text: "Keep booking", callback_data: `booking:cancel:no:${refCode}` },
+      ],
+    ],
+  };
+}
+
+export async function cancelBookingByRefCode(
+  pool: pg.Pool,
+  refCode: string
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE bookings
+     SET status = 'cancelled', updated_at = NOW()
+     WHERE ref_code = $1 AND status = 'confirmed'
+     RETURNING id`,
+    [refCode]
+  );
+
+  return result.rowCount !== null && result.rowCount > 0;
+}
+
+export function formatBookingCancelled(refCode: string): string {
+  return `Booking ${refCode} has been cancelled.`;
+}
+
+export function formatReschedulePrompt(refCode: string): string {
+  return `Rescheduling booking ${refCode}. Pick a new date:`;
+}
+
+export function formatCancelPrompt(refCode: string): string {
+  return `Are you sure you want to cancel booking ${refCode}?`;
+}
+
+export function formatBookingKept(refCode: string): string {
+  return `Booking ${refCode} is still active.`;
+}
+
+export async function rescheduleBookingByRefCode(
+  pool: pg.Pool,
+  refCode: string
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE bookings
+     SET status = 'rescheduled', updated_at = NOW()
+     WHERE ref_code = $1 AND status = 'confirmed'
+     RETURNING id`,
+    [refCode]
+  );
+
+  return result.rowCount !== null && result.rowCount > 0;
+}
