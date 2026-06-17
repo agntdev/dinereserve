@@ -13,12 +13,17 @@ import {
   PARTY_SIZE_PROMPT,
   startOfDay,
 } from "./reserve.js";
+import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
+import { assignTables, formatTableAssignment } from "./tables.js";
 
 interface SessionData extends Record<string, unknown> {
   startedAt?: number;
   reservationDate?: string;
   partySize?: number;
   awaitingPartySize?: boolean;
+  availableSlots?: string[];
+  slotPage?: number;
+  selectedSlot?: string;
 }
 
 const WELCOME_TEXT =
@@ -65,6 +70,20 @@ function isBotCommand(ctx: Context): boolean {
   );
 }
 
+function sessionString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function sessionNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function sessionStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : undefined;
+}
+
 function todayUtc(): Date {
   return startOfDay(new Date());
 }
@@ -84,10 +103,7 @@ async function showAvailabilityForParty(
   partySize: number,
   editMessage: boolean
 ): Promise<void> {
-  const reservationDate =
-    typeof ctx.session.reservationDate === "string"
-      ? ctx.session.reservationDate
-      : undefined;
+  const reservationDate = sessionString(ctx.session.reservationDate);
   if (!reservationDate) {
     if (editMessage) {
       await ctx.editMessageText("Please pick a date first with /reserve.");
@@ -99,16 +115,53 @@ async function showAvailabilityForParty(
 
   ctx.session.partySize = partySize;
   ctx.session.awaitingPartySize = false;
+  ctx.session.selectedSlot = undefined;
 
   const dateLabel = formatSelectedDate(reservationDate);
   const result = calculateAvailability(partySize);
   const summary = formatAvailabilitySummary(partySize, dateLabel, result);
+
+  if (result.slotCount > 0) {
+    ctx.session.availableSlots = result.slots;
+    ctx.session.slotPage = 0;
+    const keyboard = buildSlotKeyboard(result.slots, 0);
+
+    if (editMessage) {
+      await ctx.editMessageText(summary, { reply_markup: keyboard });
+    } else {
+      await ctx.reply(summary, { reply_markup: keyboard });
+    }
+    return;
+  }
+
+  ctx.session.availableSlots = undefined;
+  ctx.session.slotPage = undefined;
 
   if (editMessage) {
     await ctx.editMessageText(summary);
   } else {
     await ctx.reply(summary);
   }
+}
+
+async function showSlotPage(ctx: BotContext, page: number): Promise<void> {
+  const slots = sessionStringArray(ctx.session.availableSlots);
+  const partySize = sessionNumber(ctx.session.partySize);
+  const reservationDate = sessionString(ctx.session.reservationDate);
+
+  if (!slots || !partySize || !reservationDate) {
+    await ctx.editMessageText("Please restart your reservation with /reserve.");
+    return;
+  }
+
+  ctx.session.slotPage = page;
+  const dateLabel = formatSelectedDate(reservationDate);
+  const result = calculateAvailability(partySize);
+  const summary = formatAvailabilitySummary(partySize, dateLabel, result);
+
+  await ctx.editMessageText(summary, {
+    reply_markup: buildSlotKeyboard(slots, page),
+  });
 }
 
 export function buildBot(token: string): ReturnType<typeof createBot> {
@@ -130,6 +183,9 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     ctx.session.reservationDate = undefined;
     ctx.session.partySize = undefined;
     ctx.session.awaitingPartySize = false;
+    ctx.session.availableSlots = undefined;
+    ctx.session.slotPage = undefined;
+    ctx.session.selectedSlot = undefined;
     await sendCalendar(ctx, today.getUTCFullYear(), today.getUTCMonth());
   });
 
@@ -174,6 +230,9 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       ctx.session.reservationDate = isoDate;
       ctx.session.partySize = undefined;
       ctx.session.awaitingPartySize = false;
+      ctx.session.availableSlots = undefined;
+      ctx.session.slotPage = undefined;
+      ctx.session.selectedSlot = undefined;
       await ctx.editMessageText(
         `Date selected: ${formatSelectedDate(isoDate)}`
       );
@@ -219,6 +278,56 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
 
     await showAvailabilityForParty(ctx, size, true);
     await ctx.answerCallbackQuery({ text: "Checking availability" });
+  });
+
+  bot.callbackQuery(/^slotpage:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const page = Number.parseInt(data.split(":")[1] ?? "", 10);
+    if (!Number.isFinite(page) || page < 0) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    await showSlotPage(ctx, page);
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^slot:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const slot = data.slice("slot:".length);
+    const partySize = sessionNumber(ctx.session.partySize);
+    const slots = sessionStringArray(ctx.session.availableSlots);
+
+    if (!partySize || !slots || !slots.includes(slot)) {
+      await ctx.answerCallbackQuery({ text: "That time is unavailable." });
+      return;
+    }
+
+    const assignment = assignTables(partySize);
+    if (!assignment) {
+      await ctx.editMessageText(
+        `Sorry, we cannot seat ${partySize} guests at ${slot}.`
+      );
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    ctx.session.selectedSlot = slot;
+    const tableSummary = formatTableAssignment(assignment);
+    await ctx.editMessageText(
+      formatSlotSelection(slot, partySize, tableSummary)
+    );
+    await ctx.answerCallbackQuery({ text: "Time selected" });
   });
 
   bot.on("message", async (ctx: BotContext) => {
