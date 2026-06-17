@@ -7,11 +7,19 @@ import {
 } from "./availability.js";
 import {
   buildBookingDatetime,
+  buildBookingActionKeyboard,
+  buildCancelConfirmKeyboard,
   buildConfirmKeyboard,
   buildGuestSkipKeyboard,
+  cancelBookingByRefCode,
+  formatBookingCancelled,
   formatBookingConfirmation,
+  formatBookingKept,
+  formatCancelPrompt,
   formatConfirmationSummary,
+  formatReschedulePrompt,
   generateRefCode,
+  rescheduleBookingByRefCode,
   saveBooking,
 } from "./booking.js";
 import {
@@ -41,6 +49,8 @@ interface SessionData extends Record<string, unknown> {
   guestPhone?: string;
   assignedTableIds?: string[];
   reservationStep?: ReservationStep;
+  activeRefCode?: string;
+  rescheduling?: boolean;
 }
 
 const WELCOME_TEXT =
@@ -320,7 +330,25 @@ async function completeBooking(ctx: BotContext): Promise<void> {
   const refCode = generateRefCode(reservationDate, slot, userId);
   const { startDt, endDt } = buildBookingDatetime(reservationDate, slot);
 
+  const rescheduling = ctx.session.rescheduling === true;
+  const previousRefCode = sessionString(ctx.session.activeRefCode);
+
+  if (rescheduling && previousRefCode) {
+    const pool = getBookingPool();
+    if (pool) {
+      try {
+        await rescheduleBookingByRefCode(pool, previousRefCode);
+      } catch (error) {
+        console.error("Failed to reschedule booking:", error);
+      }
+    }
+    ctx.session.rescheduling = false;
+    ctx.session.activeRefCode = undefined;
+  }
+
   await persistBooking(ctx, refCode, startDt, endDt);
+
+  ctx.session.activeRefCode = refCode;
 
   await ctx.reply(
     formatBookingConfirmation({
@@ -331,10 +359,12 @@ async function completeBooking(ctx: BotContext): Promise<void> {
       tableSummary,
       guestName: sessionString(ctx.session.guestName),
       guestPhone: sessionString(ctx.session.guestPhone),
-    })
+    }),
+    { reply_markup: buildBookingActionKeyboard(refCode) }
   );
 
   clearReservationProgress(ctx.session);
+  ctx.session.activeRefCode = refCode;
 }
 
 export function buildBot(token: string): ReturnType<typeof createBot> {
@@ -530,6 +560,73 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       ctx.session.guestPhone = undefined;
       await ctx.answerCallbackQuery({ text: "Skipped" });
       await showConfirmationSummary(ctx);
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^booking:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data.startsWith("booking:cancel:yes:")) {
+      const refCode = data.slice("booking:cancel:yes:".length);
+      const pool = getBookingPool();
+      if (pool) {
+        try {
+          await cancelBookingByRefCode(pool, refCode);
+        } catch (error) {
+          console.error("Failed to cancel booking:", error);
+        }
+      }
+
+      ctx.session.activeRefCode = undefined;
+      ctx.session.rescheduling = false;
+      await ctx.editMessageText(formatBookingCancelled(refCode));
+      await ctx.answerCallbackQuery({ text: "Booking cancelled" });
+      return;
+    }
+
+    if (data.startsWith("booking:cancel:no:")) {
+      const refCode = data.slice("booking:cancel:no:".length);
+      await ctx.editMessageText(formatBookingKept(refCode), {
+        reply_markup: buildBookingActionKeyboard(refCode),
+      });
+      await ctx.answerCallbackQuery({ text: "Booking kept" });
+      return;
+    }
+
+    if (data.startsWith("booking:cancel:")) {
+      const refCode = data.slice("booking:cancel:".length);
+      await ctx.editMessageText(formatCancelPrompt(refCode), {
+        reply_markup: buildCancelConfirmKeyboard(refCode),
+      });
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data.startsWith("booking:reschedule:")) {
+      const refCode = data.slice("booking:reschedule:".length);
+      ctx.session.rescheduling = true;
+      ctx.session.activeRefCode = refCode;
+      clearReservationProgress(ctx.session);
+      ctx.session.rescheduling = true;
+      ctx.session.activeRefCode = refCode;
+
+      await ctx.editMessageText(formatReschedulePrompt(refCode));
+      const today = todayUtc();
+      await ctx.reply(RESERVE_PROMPT, {
+        reply_markup: buildCalendarKeyboard(
+          today.getUTCFullYear(),
+          today.getUTCMonth(),
+          today
+        ),
+      });
+      await ctx.answerCallbackQuery({ text: "Pick a new date" });
       return;
     }
 
