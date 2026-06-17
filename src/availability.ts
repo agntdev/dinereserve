@@ -3,38 +3,39 @@ import {
   type RestaurantConfig,
   totalSeatCapacity,
 } from "./config.js";
+import {
+  type BookingInterval,
+  filterSlotsByBookings,
+  formatSlotDateTime,
+  generateSlotTimes,
+  generateSlotsForDate,
+  loadConfigFromDefaults,
+  type SlotDateTime,
+} from "./availability/slots.js";
+
+export type { BookingInterval, SlotDateTime };
+export {
+  filterSlotsByBookings,
+  formatSlotDateTime,
+  generateSlotTimes,
+  generateSlotsForDate,
+  intervalsOverlap,
+  isActiveBooking,
+  loadConfigFromDefaults,
+  parseIsoDate,
+  slotStartDate,
+  toMinutes,
+} from "./availability/slots.js";
+
+export interface AvailabilityOptions {
+  isoDate?: string;
+  bookings?: BookingInterval[];
+}
 
 export interface AvailabilityResult {
   slotCount: number;
   slots: string[];
   maxPartySize: number;
-}
-
-function toMinutes(hour: number, minute: number): number {
-  return hour * 60 + minute;
-}
-
-function formatTime(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
-export function generateSlotTimes(config: RestaurantConfig = DEFAULT_RESTAURANT_CONFIG): string[] {
-  const opening = toMinutes(config.openingHour, config.openingMinute);
-  const closing = toMinutes(config.closingHour, config.closingMinute);
-  const lastStart = closing - config.sittingLengthMinutes;
-
-  if (lastStart < opening) {
-    return [];
-  }
-
-  const slots: string[] = [];
-  for (let minute = opening; minute <= lastStart; minute += config.slotGranularityMinutes) {
-    slots.push(formatTime(minute));
-  }
-
-  return slots;
 }
 
 function canSeatParty(
@@ -52,11 +53,27 @@ function canSeatParty(
   return partySize <= totalSeatCapacity(config);
 }
 
+function resolveSlotLabels(
+  config: RestaurantConfig,
+  options?: AvailabilityOptions
+): string[] {
+  const dateSlots = options?.isoDate
+    ? generateSlotsForDate(options.isoDate, config)
+    : generateSlotsForDate("1970-01-01", config);
+
+  const availableSlots = options?.bookings
+    ? filterSlotsByBookings(dateSlots, options.bookings)
+    : dateSlots;
+
+  return availableSlots.map(formatSlotDateTime);
+}
+
 export function calculateAvailability(
   partySize: number,
-  config: RestaurantConfig = DEFAULT_RESTAURANT_CONFIG
+  config: RestaurantConfig = loadConfigFromDefaults(),
+  options?: AvailabilityOptions
 ): AvailabilityResult {
-  const slots = generateSlotTimes(config);
+  const slots = resolveSlotLabels(config, options);
   const maxPartySize = totalSeatCapacity(config);
 
   if (!canSeatParty(partySize, config)) {

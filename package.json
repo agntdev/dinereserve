@@ -11,7 +11,8 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
-    "db:seed": "tsx scripts/db-migrate.ts --seed"
+    "db:seed": "tsx scripts/db-migrate.ts --seed",
+    "test:unit": "tsx tests/unit/availability-slots.test.ts"
   },
   "dependencies": {
     "@agntdev/bot-toolkit": "*",

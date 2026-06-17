@@ -118,7 +118,9 @@ async function showAvailabilityForParty(
   ctx.session.selectedSlot = undefined;
 
   const dateLabel = formatSelectedDate(reservationDate);
-  const result = calculateAvailability(partySize);
+  const result = calculateAvailability(partySize, undefined, {
+    isoDate: reservationDate,
+  });
   const summary = formatAvailabilitySummary(partySize, dateLabel, result);
 
   if (result.slotCount > 0) {
@@ -156,7 +158,9 @@ async function showSlotPage(ctx: BotContext, page: number): Promise<void> {
 
   ctx.session.slotPage = page;
   const dateLabel = formatSelectedDate(reservationDate);
-  const result = calculateAvailability(partySize);
+  const result = calculateAvailability(partySize, undefined, {
+    isoDate: reservationDate,
+  });
   const summary = formatAvailabilitySummary(partySize, dateLabel, result);
 
   await ctx.editMessageText(summary, {
