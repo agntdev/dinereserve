@@ -2,12 +2,12 @@ import type { Bot } from "grammy";
 import type { BotContext } from "@agntdev/bot-toolkit";
 import { getRepository } from "../db/index.js";
 import { getPool } from "../db/pool.js";
-import type { RestaurantTableRow } from "../db/types.js";
 import {
   DEFAULT_RESTAURANT_CONFIG,
   type RestaurantConfig,
   type Table,
 } from "../config.js";
+import { loadRestaurantConfig } from "../restaurant-config.js";
 import { isAdmin } from "./auth.js";
 
 const ACCESS_DENIED = "This command is only available to restaurant staff.";
@@ -61,44 +61,16 @@ async function loadConfig(): Promise<{
     return null;
   }
 
-  try {
-    const repo = getRepository(pool);
-    const configRow = await repo.configs.getLatest("restaurant.defaults");
-    const tableRows = await repo.restaurantTables.list();
-
-    if (!configRow) {
-      return { config: { ...DEFAULT_RESTAURANT_CONFIG, tables: [] }, hasConfig: false };
-    }
-
-    const value = configRow.value as Record<string, unknown>;
-    const tables: Table[] = tableRows.map((r: RestaurantTableRow) => ({
-      id: r.id,
-      seats: r.seats,
-      label: r.label ?? undefined,
-    }));
-
+  const config = await loadRestaurantConfig(pool);
+  if (!config) {
     return {
-      config: {
-        openingHour: (value.openingHour as number) ?? DEFAULT_RESTAURANT_CONFIG.openingHour,
-        openingMinute: (value.openingMinute as number) ?? DEFAULT_RESTAURANT_CONFIG.openingMinute,
-        closingHour: (value.closingHour as number) ?? DEFAULT_RESTAURANT_CONFIG.closingHour,
-        closingMinute: (value.closingMinute as number) ?? DEFAULT_RESTAURANT_CONFIG.closingMinute,
-        sittingLengthMinutes:
-          (value.sittingLengthMinutes as number) ?? DEFAULT_RESTAURANT_CONFIG.sittingLengthMinutes,
-        slotGranularityMinutes:
-          (value.slotGranularityMinutes as number) ??
-          DEFAULT_RESTAURANT_CONFIG.slotGranularityMinutes,
-        allowTableSplitting:
-          (value.allowTableSplitting as boolean) ??
-          DEFAULT_RESTAURANT_CONFIG.allowTableSplitting,
-        tables,
-      },
-      hasConfig: true,
+      config: { ...DEFAULT_RESTAURANT_CONFIG, tables: [] },
+      hasConfig: false,
     };
-  } catch (error) {
-    console.error("Failed to load config:", error);
-    return null;
   }
+
+  const hasConfig = (await getRepository(pool).configs.getLatest("restaurant.defaults")) !== null;
+  return { config, hasConfig };
 }
 
 async function persistConfigValue(key: string, value: unknown): Promise<void> {

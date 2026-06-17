@@ -4,7 +4,13 @@ import pg from "pg";
 import {
   calculateAvailability,
   formatAvailabilitySummary,
+  type BookingInterval,
+  intervalsOverlap,
+  isActiveBooking,
 } from "./availability.js";
+import { DEFAULT_RESTAURANT_CONFIG, type RestaurantConfig } from "./config.js";
+import { getRepository } from "./db/index.js";
+import type { BookingRow } from "./db/types.js";
 import {
   buildBookingDatetime,
   buildBookingActionKeyboard,
@@ -20,7 +26,6 @@ import {
   formatReschedulePrompt,
   generateRefCode,
   rescheduleBookingByRefCode,
-  saveBooking,
 } from "./booking.js";
 import {
   buildCalendarKeyboard,
@@ -46,9 +51,11 @@ import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
 import {
   buildPendingReminder,
+  getReminderOffsetMinutes,
   registerReminderHandlers,
   type PendingReminder,
 } from "./reminders.js";
+import { loadRestaurantConfig } from "./restaurant-config.js";
 
 type ReservationStep = "guest_name" | "guest_phone" | "confirm";
 
@@ -105,6 +112,12 @@ const GUEST_PHONE_PROMPT =
   "What's your phone number? (optional)";
 const BOOKING_CANCELLED_TEXT =
   "Booking cancelled. Send /reserve to start again.";
+
+const PERSISTENCE_ERROR_REPLY =
+  "Could not save your booking. Please ensure the database is configured and try again.";
+
+const CANCEL_PERSISTENCE_ERROR_REPLY =
+  "Could not cancel your booking. Please try again or contact the restaurant.";
 
 let bookingPool: pg.Pool | undefined;
 
@@ -168,6 +181,68 @@ function getBookingPool(): pg.Pool | null {
   return bookingPool;
 }
 
+async function getReservationConfig(): Promise<RestaurantConfig> {
+  const pool = getBookingPool();
+  if (!pool) {
+    return DEFAULT_RESTAURANT_CONFIG;
+  }
+
+  const config = await loadRestaurantConfig(pool);
+  return config ?? DEFAULT_RESTAURANT_CONFIG;
+}
+
+function dayBoundsFromIsoDate(isoDate: string): { start: Date; end: Date } {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return {
+    start: new Date(Date.UTC(year, month - 1, day)),
+    end: new Date(Date.UTC(year, month - 1, day + 1)),
+  };
+}
+
+async function getBookingsForDate(isoDate: string): Promise<BookingRow[]> {
+  const pool = getBookingPool();
+  if (!pool) {
+    return [];
+  }
+
+  const { start, end } = dayBoundsFromIsoDate(isoDate);
+  return getRepository(pool).bookings.listOverlapping(start, end);
+}
+
+function toBookingIntervals(rows: BookingRow[]): BookingInterval[] {
+  return rows.map((row) => ({
+    start: row.start_dt,
+    end: row.end_dt,
+    status: row.status,
+  }));
+}
+
+function occupiedTableIdsForSlot(
+  bookings: BookingRow[],
+  isoDate: string,
+  slot: string,
+  config: RestaurantConfig
+): string[] {
+  const { startDt, endDt } = buildBookingDatetime(isoDate, slot, config);
+  const occupied = new Set<string>();
+
+  for (const booking of bookings) {
+    if (!isActiveBooking({ start: booking.start_dt, end: booking.end_dt, status: booking.status })) {
+      continue;
+    }
+
+    if (!intervalsOverlap(startDt, endDt, booking.start_dt, booking.end_dt)) {
+      continue;
+    }
+
+    for (const tableId of booking.assigned_tables) {
+      occupied.add(tableId);
+    }
+  }
+
+  return [...occupied];
+}
+
 async function sendCalendar(
   ctx: BotContext,
   year: number,
@@ -201,9 +276,12 @@ async function showAvailabilityForParty(
   ctx.session.assignedTableIds = undefined;
   ctx.session.reservationStep = undefined;
 
+  const config = await getReservationConfig();
+  const bookingRows = await getBookingsForDate(reservationDate);
   const dateLabel = formatSelectedDate(reservationDate);
-  const result = calculateAvailability(partySize, undefined, {
+  const result = calculateAvailability(partySize, config, {
     isoDate: reservationDate,
+    bookings: toBookingIntervals(bookingRows),
   });
   const summary = formatAvailabilitySummary(partySize, dateLabel, result);
 
@@ -241,9 +319,12 @@ async function showSlotPage(ctx: BotContext, page: number): Promise<void> {
   }
 
   ctx.session.slotPage = page;
+  const config = await getReservationConfig();
+  const bookingRows = await getBookingsForDate(reservationDate);
   const dateLabel = formatSelectedDate(reservationDate);
-  const result = calculateAvailability(partySize, undefined, {
+  const result = calculateAvailability(partySize, config, {
     isoDate: reservationDate,
+    bookings: toBookingIntervals(bookingRows),
   });
   const summary = formatAvailabilitySummary(partySize, dateLabel, result);
 
@@ -277,7 +358,8 @@ async function showConfirmationSummary(ctx: BotContext): Promise<void> {
     return;
   }
 
-  const assignment = assignTables(partySize);
+  const config = await getReservationConfig();
+  const assignment = assignTables(partySize, [], config);
   const tableSummary = assignment
     ? formatTableAssignment(assignment)
     : assignedTableIds.join(", ");
@@ -301,32 +383,43 @@ async function persistBooking(
   refCode: string,
   startDt: Date,
   endDt: Date
-): Promise<void> {
+): Promise<string> {
   const pool = getBookingPool();
   if (!pool) {
-    return;
+    throw new Error("DATABASE_URL is not configured");
   }
 
   const partySize = sessionNumber(ctx.session.partySize);
   const assignedTableIds = sessionStringArray(ctx.session.assignedTableIds);
   if (!partySize || !assignedTableIds) {
-    return;
+    throw new Error("Incomplete reservation session");
   }
 
-  try {
-    await saveBooking(pool, {
-      refCode,
-      guestName: sessionString(ctx.session.guestName) ?? null,
-      guestPhone: sessionString(ctx.session.guestPhone) ?? null,
-      guestTelegramId: ctx.from?.id ?? null,
-      partySize,
-      startDt,
-      endDt,
-      assignedTableIds,
-    });
-  } catch (error) {
-    console.error("Failed to save booking:", error);
+  const repo = getRepository(pool);
+  const maxAttempts = 8;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const row = await repo.bookings.create({
+        ref_code: attempt === 0 ? refCode : undefined,
+        guest_name: sessionString(ctx.session.guestName) ?? null,
+        guest_phone: sessionString(ctx.session.guestPhone) ?? null,
+        guest_telegram_id: ctx.from?.id ?? null,
+        party_size: partySize,
+        start_dt: startDt,
+        end_dt: endDt,
+        assigned_tables: assignedTableIds,
+      });
+      return row.ref_code;
+    } catch (error) {
+      if (attempt === maxAttempts - 1) {
+        console.error("Failed to save booking:", error);
+        throw error;
+      }
+    }
   }
+
+  throw new Error("Failed to save booking");
 }
 
 async function completeBooking(ctx: BotContext): Promise<void> {
@@ -341,12 +434,13 @@ async function completeBooking(ctx: BotContext): Promise<void> {
     return;
   }
 
-  const assignment = assignTables(partySize);
+  const config = await getReservationConfig();
+  const assignment = assignTables(partySize, [], config);
   const tableSummary = assignment
     ? formatTableAssignment(assignment)
     : assignedTableIds.join(", ");
-  const refCode = generateRefCode(reservationDate, slot, userId);
-  const { startDt, endDt } = buildBookingDatetime(reservationDate, slot);
+  const preferredRefCode = generateRefCode(reservationDate, slot, userId);
+  const { startDt, endDt } = buildBookingDatetime(reservationDate, slot, config);
 
   const rescheduling = ctx.session.rescheduling === true;
   const previousRefCode = sessionString(ctx.session.activeRefCode);
@@ -354,18 +448,37 @@ async function completeBooking(ctx: BotContext): Promise<void> {
 
   if (rescheduling && previousRefCode) {
     const pool = getBookingPool();
-    if (pool) {
-      try {
-        await rescheduleBookingByRefCode(pool, previousRefCode);
-      } catch (error) {
-        console.error("Failed to reschedule booking:", error);
-      }
+    if (!pool) {
+      await ctx.reply(PERSISTENCE_ERROR_REPLY);
+      return;
     }
+
+    try {
+      const rescheduled = await rescheduleBookingByRefCode(pool, previousRefCode);
+      if (!rescheduled) {
+        await ctx.reply(
+          `Could not reschedule booking ${previousRefCode}. It may already be cancelled.`
+        );
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to reschedule booking:", error);
+      await ctx.reply(PERSISTENCE_ERROR_REPLY);
+      return;
+    }
+
     ctx.session.rescheduling = false;
     ctx.session.activeRefCode = undefined;
   }
 
-  await persistBooking(ctx, refCode, startDt, endDt);
+  let refCode: string;
+  try {
+    refCode = await persistBooking(ctx, preferredRefCode, startDt, endDt);
+  } catch (error) {
+    console.error("Failed to persist booking:", error);
+    await ctx.reply(PERSISTENCE_ERROR_REPLY);
+    return;
+  }
 
   ctx.session.activeRefCode = refCode;
 
@@ -379,10 +492,15 @@ async function completeBooking(ctx: BotContext): Promise<void> {
     guestPhone: sessionString(ctx.session.guestPhone),
   };
 
-  const pendingReminder = buildPendingReminder(reminderDetails, startDt);
-  if (!getBookingPool()) {
-    pendingReminder.dueAtMs = Date.now();
-  }
+  const pool = getBookingPool();
+  const offsetMinutes = pool
+    ? await getReminderOffsetMinutes(pool)
+    : undefined;
+  const pendingReminder = buildPendingReminder(
+    reminderDetails,
+    startDt,
+    offsetMinutes
+  );
   ctx.session.pendingReminder = pendingReminder;
 
   await ctx.reply(
@@ -560,7 +678,22 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       return;
     }
 
-    const assignment = assignTables(partySize);
+    const reservationDate = sessionString(ctx.session.reservationDate);
+    if (!reservationDate) {
+      await ctx.editMessageText("Please restart your reservation with /reserve.");
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const config = await getReservationConfig();
+    const bookingRows = await getBookingsForDate(reservationDate);
+    const occupiedTableIds = occupiedTableIdsForSlot(
+      bookingRows,
+      reservationDate,
+      slot,
+      config
+    );
+    const assignment = assignTables(partySize, occupiedTableIds, config);
     if (!assignment) {
       await ctx.editMessageText(
         `Sorry, we cannot seat ${partySize} guests at ${slot}.`
@@ -619,12 +752,26 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     if (data.startsWith("booking:cancel:yes:")) {
       const refCode = data.slice("booking:cancel:yes:".length);
       const pool = getBookingPool();
-      if (pool) {
-        try {
-          await cancelBookingByRefCode(pool, refCode);
-        } catch (error) {
-          console.error("Failed to cancel booking:", error);
+      if (!pool) {
+        await ctx.editMessageText(CANCEL_PERSISTENCE_ERROR_REPLY);
+        await ctx.answerCallbackQuery();
+        return;
+      }
+
+      try {
+        const cancelled = await cancelBookingByRefCode(pool, refCode);
+        if (!cancelled) {
+          await ctx.editMessageText(
+            `Could not cancel booking ${refCode}. It may already be cancelled.`
+          );
+          await ctx.answerCallbackQuery();
+          return;
         }
+      } catch (error) {
+        console.error("Failed to cancel booking:", error);
+        await ctx.editMessageText(CANCEL_PERSISTENCE_ERROR_REPLY);
+        await ctx.answerCallbackQuery();
+        return;
       }
 
       ctx.session.activeRefCode = undefined;

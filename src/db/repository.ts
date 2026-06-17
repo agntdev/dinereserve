@@ -147,6 +147,10 @@ function mapBookingRow(row: pg.QueryResultRow): BookingRow {
     end_dt: row.end_dt as Date,
     status: row.status as BookingStatus,
     assigned_tables: parseAssignedTables(row.assigned_tables),
+    reminder_sent_at:
+      row.reminder_sent_at === null || row.reminder_sent_at === undefined
+        ? null
+        : (row.reminder_sent_at as Date),
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -358,6 +362,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
                end_dt,
                status,
                assigned_tables,
+               reminder_sent_at,
                created_at,
                updated_at`,
             [
@@ -397,6 +402,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
            end_dt,
            status,
            assigned_tables,
+           reminder_sent_at,
            created_at,
            updated_at
          FROM bookings
@@ -424,6 +430,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
            end_dt,
            status,
            assigned_tables,
+           reminder_sent_at,
            created_at,
            updated_at
          FROM bookings
@@ -452,6 +459,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
            end_dt,
            status,
            assigned_tables,
+           reminder_sent_at,
            created_at,
            updated_at
          FROM bookings
@@ -481,6 +489,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
            end_dt,
            status,
            assigned_tables,
+           reminder_sent_at,
            created_at,
            updated_at`,
         [id, status]
@@ -506,6 +515,7 @@ function createBookingsRepository(pool: pg.Pool): BookingsRepository {
            end_dt,
            status,
            assigned_tables,
+           reminder_sent_at,
            created_at,
            updated_at
          FROM bookings

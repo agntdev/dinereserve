@@ -27,6 +27,7 @@ export interface BookingRow {
   end_dt: Date;
   status: BookingStatus;
   assigned_tables: string[];
+  reminder_sent_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

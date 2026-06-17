@@ -192,8 +192,7 @@ function buildConfirmSummary(session: SetupSession): string {
 async function persistSetup(session: SetupSession): Promise<void> {
   const pool = getPool();
   if (!pool) {
-    console.warn("DATABASE_URL not set; setup completed without persistence");
-    return;
+    throw new Error("DATABASE_URL is not configured");
   }
 
   const client = await pool.connect();
@@ -227,7 +226,8 @@ async function persistSetup(session: SetupSession): Promise<void> {
       ]
     );
 
-    for (let i = 1; i <= (session.setupTableCount ?? 0); i++) {
+    const tableCount = session.setupTableCount ?? 0;
+    for (let i = 1; i <= tableCount; i++) {
       await client.query(
         `INSERT INTO restaurant_tables (id, seats, label)
          VALUES ($1, $2, $3)
@@ -235,6 +235,17 @@ async function persistSetup(session: SetupSession): Promise<void> {
          SET seats = EXCLUDED.seats, label = EXCLUDED.label`,
         [`t${i}`, session.setupSeatsPerTable, `Table ${i}`]
       );
+    }
+
+    if (tableCount > 0) {
+      await client.query(
+        `DELETE FROM restaurant_tables
+         WHERE id !~ '^t[0-9]+$'
+            OR CAST(SUBSTRING(id FROM 2) AS INTEGER) > $1`,
+        [tableCount]
+      );
+    } else {
+      await client.query(`DELETE FROM restaurant_tables`);
     }
 
     await client.query("COMMIT");
@@ -451,11 +462,24 @@ export function registerSetupHandlers(bot: Bot<BotContext>): void {
         return;
       }
 
-      const summary = buildConfirmSummary(session);
+      const opening = formatTime(
+        session.setupOpeningHour ?? 0,
+        session.setupOpeningMinute ?? 0
+      );
+      const closing = formatTime(
+        session.setupClosingHour ?? 0,
+        session.setupClosingMinute ?? 0
+      );
+      const savedSummary =
+        "Your restaurant is configured:\n\n" +
+        `Admin: ${session.setupAdminName} (ID ${session.setupAdminId})\n` +
+        `Timezone: ${session.setupTimezone}\n` +
+        `Hours: ${opening} – ${closing}\n` +
+        `Tables: ${session.setupTableCount} × ${session.setupSeatsPerTable} seats`;
       resetSetupSession(ctx);
 
       await ctx.editMessageText(
-        "✅ Setup complete! Your restaurant is ready.\n\n" + summary
+        "✅ Setup complete! Your restaurant is ready.\n\n" + savedSummary
       );
       await ctx.answerCallbackQuery({ text: "Setup saved" });
       return;

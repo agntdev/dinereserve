@@ -149,6 +149,7 @@ async function listDueBookings(
      WHERE status = 'confirmed'
        AND reminder_sent_at IS NULL
        AND guest_telegram_id IS NOT NULL
+       AND start_dt > NOW()
        AND start_dt <= NOW() + ($1::int * INTERVAL '1 minute')
        ${guestFilter}
      ORDER BY start_dt ASC`,
