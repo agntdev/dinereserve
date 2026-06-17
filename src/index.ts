@@ -1,11 +1,18 @@
 import { buildBot } from "./bot.js";
+import { getPool } from "./db/pool.js";
+import { startReminderWorker } from "./reminders.js";
 
-// Runtime entry (dist/index.js). BOT_TOKEN is injected at runtime as a secret.
 const token = process.env.BOT_TOKEN;
 if (!token) {
-  console.error("BOT_TOKEN is required");
+  console.error("BOT_TOKEN environment variable is required");
   process.exit(1);
 }
 
 const bot = buildBot(token);
-bot.start();
+startReminderWorker(bot, getPool());
+
+bot.start({
+  onStart: (info) => {
+    console.log(`Bot @${info.username} started`);
+  },
+});

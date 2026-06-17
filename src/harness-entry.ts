@@ -5,5 +5,8 @@ import { buildBot } from "./bot.js";
 // Telegram call is made). The token is a placeholder for replay. The agntdev-ci
 // orchestrator points AGNTDEV_BOT_MODULE at the compiled dist/harness-entry.js.
 export function makeBot() {
-  return buildBot(process.env.BOT_TOKEN ?? "harness-test-token");
+  if (!process.env.BOT_TOKEN) {
+    process.env.BOT_TOKEN = "harness-test-token";
+  }
+  return buildBot(process.env.BOT_TOKEN);
 }

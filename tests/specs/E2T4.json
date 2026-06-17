@@ -1,0 +1,34 @@
+[
+  {
+    "name": "E2T4: non-admin /config gets access denied",
+    "steps": [
+      {
+        "send": { "text": "/config" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "This command is only available to restaurant staff."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T4: non-admin cfg callback gets access denied",
+    "steps": [
+      {
+        "send": { "callback": "cfg:menu", "messageId": 1 },
+        "expect": [
+          {
+            "method": "answerCallbackQuery",
+            "payload": {
+              "text": "Only staff can manage configuration."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

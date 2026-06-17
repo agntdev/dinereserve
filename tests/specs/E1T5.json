@@ -1,0 +1,250 @@
+[
+  {
+    "name": "E1T5: confirmation includes reschedule and cancel buttons",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:yes", "messageId": 6 },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Booking confirmed!\n\nReference: 5MNPWV\n\nSaturday, June 20, 2026 at 19:00\n4 guests — Table 2 (4 seats)\nName: Not provided\nPhone: Not provided",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    {
+                      "text": "Reschedule",
+                      "callback_data": "booking:reschedule:5MNPWV"
+                    },
+                    {
+                      "text": "Cancel booking",
+                      "callback_data": "booking:cancel:5MNPWV"
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T5: cancel booking asks for confirmation then cancels",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:yes", "messageId": 6 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "booking:cancel:5MNPWV", "messageId": 7 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Are you sure you want to cancel booking 5MNPWV?",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    {
+                      "text": "Yes, cancel",
+                      "callback_data": "booking:cancel:yes:5MNPWV"
+                    },
+                    {
+                      "text": "Keep booking",
+                      "callback_data": "booking:cancel:no:5MNPWV"
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      },
+      {
+        "send": { "callback": "booking:cancel:yes:5MNPWV", "messageId": 7 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Booking 5MNPWV has been cancelled."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T5: keep booking restores action buttons",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:yes", "messageId": 6 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "booking:cancel:5MNPWV", "messageId": 7 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "booking:cancel:no:5MNPWV", "messageId": 7 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Booking 5MNPWV is still active.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    {
+                      "text": "Reschedule",
+                      "callback_data": "booking:reschedule:5MNPWV"
+                    },
+                    {
+                      "text": "Cancel booking",
+                      "callback_data": "booking:cancel:5MNPWV"
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T5: reschedule restarts calendar flow",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:yes", "messageId": 6 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "booking:reschedule:5MNPWV", "messageId": 7 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Rescheduling booking 5MNPWV. Pick a new date:"
+            }
+          },
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Pick a date for your reservation:"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-21", "messageId": 8 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:2", "messageId": 9 },
+        "expect": [{ "method": "editMessageText" }]
+      }
+    ]
+  }
+]

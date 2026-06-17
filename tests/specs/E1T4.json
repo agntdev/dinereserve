@@ -1,0 +1,224 @@
+[
+  {
+    "name": "E1T4: slot selection prompts for optional guest name",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Selected 19:00 for 4 guests.\nTables: Table 2 (4 seats)"
+            }
+          },
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "What name should we put on the booking? (optional)",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [{ "text": "Skip", "callback_data": "guest:skip" }]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T4: guest name and phone lead to confirmation summary",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "text": "Alex Guest" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "What's your phone number? (optional)",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [{ "text": "Skip", "callback_data": "guest:skip" }]
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "send": { "text": "+15551234567" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Please confirm your reservation:\n\nDate: Saturday, June 20, 2026\nTime: 19:00\nGuests: 4\nTables: Table 2 (4 seats)\nName: Alex Guest\nPhone: +15551234567",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "Confirm", "callback_data": "confirm:yes" },
+                    { "text": "Cancel", "callback_data": "confirm:no" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T4: skipping guest details shows confirmation summary",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Please confirm your reservation:\n\nDate: Saturday, June 20, 2026\nTime: 19:00\nGuests: 4\nTables: Table 2 (4 seats)\nName: Not provided\nPhone: Not provided",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "Confirm", "callback_data": "confirm:yes" },
+                    { "text": "Cancel", "callback_data": "confirm:no" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T4: confirming booking returns reference code",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:yes", "messageId": 6 },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Booking confirmed!\n\nReference: 5MNPWV\n\nSaturday, June 20, 2026 at 19:00\n4 guests — Table 2 (4 seats)\nName: Not provided\nPhone: Not provided"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T4: cancelling confirmation ends the flow",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 4 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "guest:skip", "messageId": 5 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "confirm:no", "messageId": 6 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Booking cancelled. Send /reserve to start again."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]

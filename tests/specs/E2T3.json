@@ -1,0 +1,18 @@
+[
+  {
+    "name": "E2T3: non-admin /capacity_today gets access denied",
+    "steps": [
+      {
+        "send": { "text": "/capacity_today" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "This command is only available to restaurant staff."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

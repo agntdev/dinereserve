@@ -1,0 +1,122 @@
+[
+  {
+    "name": "E1T3: availability includes time slot buttons",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "4 guests on Saturday, June 20, 2026:\n39 time slots available.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "11:00", "callback_data": "slot:11:00" },
+                    { "text": "11:15", "callback_data": "slot:11:15" },
+                    { "text": "11:30", "callback_data": "slot:11:30" },
+                    { "text": "11:45", "callback_data": "slot:11:45" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T3: selecting a time slot assigns tables",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:19:00", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Selected 19:00 for 4 guests.\nTables: Table 2 (4 seats)"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T3: slot pagination shows next page",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slotpage:1", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "4 guests on Saturday, June 20, 2026:\n39 time slots available."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T3: large party gets multi-table assignment",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:8", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "slot:12:00", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Selected 12:00 for 8 guests.\nTables: Table 1 (2 seats), Table 2 (4 seats), Table 3 (4 seats)"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
