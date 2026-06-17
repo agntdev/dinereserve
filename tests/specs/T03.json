@@ -8,7 +8,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "DineReserve commands:\n\n/start — Open the main menu\n/reserve — Book a table\n/help — Show this command list\n\nAdmin commands (owners only):\n/bookings_today — Today's bookings\n/bookings — Bookings for a date\n/capacity_today — Today's capacity\n/config — Restaurant settings\n/export — Export bookings to CSV"
+              "text": "DineReserve commands:\n\n/start — Open the main menu\n/reserve — Book a table\n/help — Show this command list\n\nAdmin commands (owners only):\n/setup — Initial restaurant setup\n/bookings_today — Today's bookings\n/bookings — Bookings for a date\n/capacity_today — Today's capacity\n/config — Restaurant settings\n/export — Export bookings to CSV"
             }
           }
         ]
