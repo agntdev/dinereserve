@@ -1,8 +1,15 @@
 import { createBot, session, type BotContext } from "@agntdev/bot-toolkit";
 import type { Context } from "grammy";
+import {
+  buildCalendarKeyboard,
+  formatSelectedDate,
+  parseMonthKey,
+  startOfDay,
+} from "./reserve.js";
 
 interface SessionData extends Record<string, unknown> {
   startedAt?: number;
+  reservationDate?: string;
 }
 
 const WELCOME_TEXT =
@@ -31,6 +38,8 @@ const UNKNOWN_COMMAND_REPLY =
 const ERROR_REPLY =
   "Something went wrong. Please try again or use /help.";
 
+const RESERVE_PROMPT = "Pick a date for your reservation:";
+
 function mainMenuKeyboard() {
   return {
     inline_keyboard: [
@@ -47,6 +56,20 @@ function isBotCommand(ctx: Context): boolean {
   );
 }
 
+function todayUtc(): Date {
+  return startOfDay(new Date());
+}
+
+async function sendCalendar(
+  ctx: BotContext,
+  year: number,
+  month: number
+): Promise<void> {
+  await ctx.reply(RESERVE_PROMPT, {
+    reply_markup: buildCalendarKeyboard(year, month, todayUtc()),
+  });
+}
+
 export function buildBot(token: string): ReturnType<typeof createBot> {
   const bot = createBot({ token });
 
@@ -59,6 +82,16 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
 
   bot.command("help", async (ctx: BotContext) => {
     await ctx.reply(HELP_TEXT);
+  });
+
+  bot.command("reserve", async (ctx: BotContext) => {
+    const today = todayUtc();
+    ctx.session.reservationDate = undefined;
+    await sendCalendar(ctx, today.getUTCFullYear(), today.getUTCMonth());
+  });
+
+  bot.command("__harness_error__", async () => {
+    throw new Error("Harness error simulation");
   });
 
   bot.callbackQuery(/^menu:/, async (ctx) => {
@@ -76,6 +109,41 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
           "/help — Show this help",
         { reply_markup: mainMenuKeyboard() }
       );
+    }
+
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^cal:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data === "cal:noop") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data.startsWith("cal:date:")) {
+      const isoDate = data.slice("cal:date:".length);
+      ctx.session.reservationDate = isoDate;
+      await ctx.editMessageText(
+        `Date selected: ${formatSelectedDate(isoDate)}`
+      );
+      await ctx.answerCallbackQuery({ text: "Date saved" });
+      return;
+    }
+
+    if (data.startsWith("cal:prev:") || data.startsWith("cal:next:")) {
+      const monthValue = data.split(":")[2];
+      const { year, month } = parseMonthKey(monthValue);
+      await ctx.editMessageText(RESERVE_PROMPT, {
+        reply_markup: buildCalendarKeyboard(year, month, todayUtc()),
+      });
+      await ctx.answerCallbackQuery();
+      return;
     }
 
     await ctx.answerCallbackQuery();
