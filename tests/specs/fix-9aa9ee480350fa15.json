@@ -1,0 +1,100 @@
+[
+  {
+    "name": "/book shows error when database is not configured",
+    "steps": [
+      {
+        "send": { "text": "/book 2025-12-25 4" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Sorry, bookings are not available right now. The database is not configured." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/book shows usage when missing args",
+    "steps": [
+      {
+        "send": { "text": "/book" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Usage: /book <date> <party_size>\nExample: /book 2025-12-25 4" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/book shows error for invalid party size",
+    "steps": [
+      {
+        "send": { "text": "/book 2025-12-25 invalid" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Please provide a valid party size (number of guests)." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/cancel shows error when database is not configured",
+    "steps": [
+      {
+        "send": { "text": "/cancel ABC123" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Sorry, cancellations are not available right now. The database is not configured." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/cancel shows usage when missing ref code",
+    "steps": [
+      {
+        "send": { "text": "/cancel" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Usage: /cancel <ref_code>\nExample: /cancel ABC123" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/reschedule shows error when database is not configured",
+    "steps": [
+      {
+        "send": { "text": "/reschedule ABC123 2025-12-26" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Sorry, rescheduling is not available right now. The database is not configured." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/reschedule shows usage when missing args",
+    "steps": [
+      {
+        "send": { "text": "/reschedule" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Usage: /reschedule <ref_code> <new_date>\nExample: /reschedule ABC123 2025-12-26" }
+          }
+        ]
+      }
+    ]
+  }
+]
