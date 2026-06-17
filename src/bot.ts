@@ -34,6 +34,11 @@ import {
 import { registerSetupHandlers } from "./admin/setup.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
+import {
+  buildPendingReminder,
+  registerReminderHandlers,
+  type PendingReminder,
+} from "./reminders.js";
 
 type ReservationStep = "guest_name" | "guest_phone" | "confirm";
 
@@ -51,6 +56,7 @@ interface SessionData extends Record<string, unknown> {
   reservationStep?: ReservationStep;
   activeRefCode?: string;
   rescheduling?: boolean;
+  pendingReminder?: PendingReminder;
 }
 
 const WELCOME_TEXT =
@@ -350,16 +356,24 @@ async function completeBooking(ctx: BotContext): Promise<void> {
 
   ctx.session.activeRefCode = refCode;
 
+  const reminderDetails = {
+    refCode,
+    dateLabel: formatSelectedDate(reservationDate),
+    slot,
+    partySize,
+    tableSummary,
+    guestName: sessionString(ctx.session.guestName),
+    guestPhone: sessionString(ctx.session.guestPhone),
+  };
+
+  const pendingReminder = buildPendingReminder(reminderDetails, startDt);
+  if (!getBookingPool()) {
+    pendingReminder.dueAtMs = Date.now();
+  }
+  ctx.session.pendingReminder = pendingReminder;
+
   await ctx.reply(
-    formatBookingConfirmation({
-      refCode,
-      dateLabel: formatSelectedDate(reservationDate),
-      slot,
-      partySize,
-      tableSummary,
-      guestName: sessionString(ctx.session.guestName),
-      guestPhone: sessionString(ctx.session.guestPhone),
-    }),
+    formatBookingConfirmation(reminderDetails),
     { reply_markup: buildBookingActionKeyboard(refCode) }
   );
 
@@ -388,6 +402,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   });
 
   registerSetupHandlers(bot);
+  registerReminderHandlers(bot, getBookingPool);
 
   bot.command("__harness_error__", async () => {
     throw new Error("Harness error simulation");
@@ -586,6 +601,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
 
       ctx.session.activeRefCode = undefined;
       ctx.session.rescheduling = false;
+      ctx.session.pendingReminder = undefined;
       await ctx.editMessageText(formatBookingCancelled(refCode));
       await ctx.answerCallbackQuery({ text: "Booking cancelled" });
       return;

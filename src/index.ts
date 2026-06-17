@@ -1,4 +1,6 @@
 import { buildBot } from "./bot.js";
+import { getPool } from "./db/pool.js";
+import { startReminderWorker } from "./reminders.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -7,6 +9,7 @@ if (!token) {
 }
 
 const bot = buildBot(token);
+startReminderWorker(bot, getPool());
 
 bot.start({
   onStart: (info) => {
