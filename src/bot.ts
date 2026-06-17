@@ -5,11 +5,22 @@ import { listOverlapping } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
 import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
 import { persistBooking } from "./booking.js";
+import {
+  buildPendingReminder,
+  deliverPendingSessionReminder,
+  formatReminderMessage,
+  getReminderOffsetMinutes,
+  listDueBookings,
+  markReminderSent,
+  reminderDetailsFromRow,
+  type PendingReminder,
+} from "./reminders.js";
 
 export interface Session {
   step?: "awaiting_date" | "awaiting_party_size" | "awaiting_slot";
   reservationDate?: string;
   partySize?: number;
+  pendingReminder?: PendingReminder;
 }
 
 type MyContext = Context & SessionFlavor<Session>;
@@ -21,6 +32,40 @@ export function buildBot(token: string) {
 
   bot.command("start", async (ctx) => {
     await ctx.reply("Welcome! I am ready to help.");
+  });
+
+  bot.command("reminders", async (ctx) => {
+    const guestId = ctx.from?.id;
+    if (!guestId) {
+      await ctx.reply("Unable to identify your Telegram account.");
+      return;
+    }
+
+    let delivered = 0;
+    const pending = ctx.session.pendingReminder;
+
+    const sessionDelivered = await deliverPendingSessionReminder(
+      pending,
+      (text) => ctx.reply(text),
+    );
+    if (sessionDelivered > 0) {
+      ctx.session.pendingReminder = undefined;
+      delivered += sessionDelivered;
+    }
+
+    const offsetMinutes = await getReminderOffsetMinutes();
+    const dueBookings = await listDueBookings(offsetMinutes, guestId);
+
+    for (const booking of dueBookings) {
+      const details = reminderDetailsFromRow(booking);
+      await ctx.reply(formatReminderMessage(details));
+      await markReminderSent(booking.ref_code);
+      delivered += 1;
+    }
+
+    if (delivered === 0) {
+      await ctx.reply("No reminders are due for your bookings right now.");
+    }
   });
 
   bot.command("reserve", async (ctx) => {
@@ -139,6 +184,14 @@ export function buildBot(token: string) {
       });
 
       if (result.success) {
+        await completeBooking(ctx as MyContext, result.ref_code, {
+          guestName,
+          partySize: ctx.session.partySize!,
+          isoDate: ctx.session.reservationDate!,
+          slotStart: selected.start,
+          slotEnd: selected.end,
+        });
+
         await ctx.reply(
           `Booking confirmed! Your reference code is ${result.ref_code}. ` +
             `${ctx.session.partySize} people on ${ctx.session.reservationDate} at ${selected.start}–${selected.end}.`
@@ -157,6 +210,44 @@ export function buildBot(token: string) {
   });
 
   return bot;
+}
+
+interface BookingInput {
+  guestName: string;
+  partySize: number;
+  isoDate: string;
+  slotStart: string;
+  slotEnd: string;
+}
+
+function formatTableSummary(): string {
+  const tables = DEFAULT_RESTAURANT_CONFIG.tables;
+  const totalSeats = tables.reduce((sum, t) => sum + t.capacity, 0);
+  return `${tables.length} tables (${totalSeats} seats)`;
+}
+
+async function completeBooking(
+  ctx: MyContext,
+  refCode: string,
+  booking: BookingInput,
+): Promise<void> {
+  const offsetMinutes = await getReminderOffsetMinutes();
+
+  const pendingReminder = buildPendingReminder(
+    {
+      refCode,
+      dateLabel: booking.isoDate,
+      slot: `${booking.slotStart}–${booking.slotEnd}`,
+      partySize: booking.partySize,
+      tableSummary: formatTableSummary(),
+      guestName: booking.guestName,
+    },
+    booking.isoDate,
+    booking.slotStart,
+    offsetMinutes,
+  );
+
+  ctx.session.pendingReminder = pendingReminder;
 }
 
 async function handleSlotSelection(ctx: MyContext): Promise<void> {
