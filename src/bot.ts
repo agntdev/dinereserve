@@ -31,6 +31,7 @@ import {
   PARTY_SIZE_PROMPT,
   startOfDay,
 } from "./reserve.js";
+import { registerBookingsHandlers } from "./admin/bookings.js";
 import { registerBookingsTodayHandlers } from "./admin/bookings-today.js";
 import {
   notifyAdminsOfCancellation,
@@ -63,6 +64,8 @@ interface SessionData extends Record<string, unknown> {
   activeRefCode?: string;
   rescheduling?: boolean;
   pendingReminder?: PendingReminder;
+  bookingsDate?: string;
+  bookingsPage?: number;
 }
 
 const WELCOME_TEXT =
@@ -420,6 +423,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
 
   registerSetupHandlers(bot);
   registerBookingsTodayHandlers(bot);
+  registerBookingsHandlers(bot);
   registerReminderHandlers(bot, getBookingPool);
 
   bot.command("__harness_error__", async () => {
