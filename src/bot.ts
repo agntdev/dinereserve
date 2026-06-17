@@ -2,15 +2,22 @@ import type { Context } from "grammy";
 import type { SessionFlavor } from "grammy";
 import { createBot } from "./toolkit/index.js";
 import type { BookingRow } from "./db/types.js";
-import { listOverlapping } from "./db/repository.js";
+import { listOverlapping, getReminderOffsetMinutes } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
 import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
 import { persistBooking } from "./booking.js";
+import {
+  buildPendingReminder,
+  deliverDueRemindersForGuest,
+  markReminderSent,
+  type PendingReminder,
+} from "./reminders.js";
 
 export interface Session {
   step?: "awaiting_date" | "awaiting_party_size" | "awaiting_slot";
   reservationDate?: string;
   partySize?: number;
+  pendingReminder?: PendingReminder;
 }
 
 type MyContext = Context & SessionFlavor<Session>;
@@ -31,6 +38,29 @@ export function buildBot(token: string) {
     await ctx.reply(
       "I'll help you book a table. Please enter the date you'd like to reserve (YYYY-MM-DD format, e.g. 2026-06-20):"
     );
+  });
+
+  bot.command("reminders", async (ctx) => {
+    const userId = ctx.from?.id ?? 0;
+    const offset = await getReminderOffsetMinutes();
+    let anythingSent = false;
+
+    const pending = ctx.session.pendingReminder;
+    if (pending && buildPendingReminder(pending, offset)) {
+      await ctx.reply(
+        `Reminder: You have a booking for ${pending.party_size} people on ${pending.iso_date} at ${pending.slot_start}–${pending.slot_end}. Ref: ${pending.ref_code}`,
+      );
+      await markReminderSent(pending.bookingId);
+      ctx.session.pendingReminder = undefined;
+      anythingSent = true;
+    }
+
+    const dbSent = await deliverDueRemindersForGuest(bot, userId, offset);
+    if (dbSent) anythingSent = true;
+
+    if (!anythingSent) {
+      await ctx.reply("No upcoming bookings that need a reminder right now.");
+    }
   });
 
   bot.on("message:text", async (ctx) => {
@@ -140,6 +170,14 @@ export function buildBot(token: string) {
       });
 
       if (result.success) {
+        ctx.session.pendingReminder = {
+          bookingId: result.id,
+          ref_code: result.ref_code,
+          iso_date: ctx.session.reservationDate!,
+          slot_start: selected.start,
+          slot_end: selected.end,
+          party_size: ctx.session.partySize!,
+        };
         await ctx.reply(
           `Booking confirmed! Your reference code is ${result.ref_code}. ` +
             `${ctx.session.partySize} people on ${ctx.session.reservationDate} at ${selected.start}–${selected.end}.`

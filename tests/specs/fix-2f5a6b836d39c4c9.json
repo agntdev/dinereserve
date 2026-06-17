@@ -1,0 +1,24 @@
+[
+  {
+    "name": "/reminders shows no upcoming when there are no pending reminders and no DB",
+    "steps": [
+      {
+        "send": { "text": "/reminders" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "No upcoming bookings that need a reminder right now." } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/start still works after /reminders changes",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Welcome! I am ready to help." } }
+        ]
+      }
+    ]
+  }
+]

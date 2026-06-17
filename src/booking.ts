@@ -20,12 +20,12 @@ export async function persistBooking(booking: {
   slot_start: string;
   slot_end: string;
   status: string;
-}): Promise<{ success: true; ref_code: string } | { success: false; error: string }> {
+}): Promise<{ success: true; ref_code: string; id: number } | { success: false; error: string }> {
   for (let attempt = 0; attempt < MAX_REFCODE_ATTEMPTS; attempt++) {
     const refCode = generateRefCode(booking.user_id, booking.iso_date, booking.slot_start);
     try {
       const result = await saveBooking({ ...booking, ref_code: refCode });
-      return { success: true, ref_code: result.ref_code };
+      return { success: true, ref_code: result.ref_code, id: result.id };
     } catch (err: any) {
       if (err.code === "23505") {
         continue;

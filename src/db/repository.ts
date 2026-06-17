@@ -17,6 +17,27 @@ export function mapBookingRow(row: Record<string, unknown>): BookingRow {
   };
 }
 
+const DEFAULT_REMINDER_OFFSET_MINUTES = 120;
+
+export async function getReminderOffsetMinutes(): Promise<number> {
+  const pool = getBookingPool();
+  if (!pool) return DEFAULT_REMINDER_OFFSET_MINUTES;
+
+  try {
+    const result = await pool.query<{ value: string }>(
+      `SELECT value FROM configs WHERE key = 'reminder_offset_minutes'`,
+    );
+    if (result.rows.length > 0) {
+      const parsed = parseInt(result.rows[0].value, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  } catch {
+    // table may not exist yet — fall back to default
+  }
+
+  return DEFAULT_REMINDER_OFFSET_MINUTES;
+}
+
 export async function listOverlapping(
   isoDate: string,
   slotStart: string,
