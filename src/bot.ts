@@ -1,9 +1,19 @@
 import { createBot, session, type BotContext } from "@agntdev/bot-toolkit";
 import type { Context } from "grammy";
+import pg from "pg";
 import {
   calculateAvailability,
   formatAvailabilitySummary,
 } from "./availability.js";
+import {
+  buildBookingDatetime,
+  buildConfirmKeyboard,
+  buildGuestSkipKeyboard,
+  formatBookingConfirmation,
+  formatConfirmationSummary,
+  generateRefCode,
+  saveBooking,
+} from "./booking.js";
 import {
   buildCalendarKeyboard,
   buildPartySizeKeyboard,
@@ -17,6 +27,8 @@ import { registerSetupHandlers } from "./admin/setup.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
 
+type ReservationStep = "guest_name" | "guest_phone" | "confirm";
+
 interface SessionData extends Record<string, unknown> {
   startedAt?: number;
   reservationDate?: string;
@@ -25,6 +37,10 @@ interface SessionData extends Record<string, unknown> {
   availableSlots?: string[];
   slotPage?: number;
   selectedSlot?: string;
+  guestName?: string;
+  guestPhone?: string;
+  assignedTableIds?: string[];
+  reservationStep?: ReservationStep;
 }
 
 const WELCOME_TEXT =
@@ -55,6 +71,14 @@ const ERROR_REPLY =
   "Something went wrong. Please try again or use /help.";
 
 const RESERVE_PROMPT = "Pick a date for your reservation:";
+const GUEST_NAME_PROMPT =
+  "What name should we put on the booking? (optional)";
+const GUEST_PHONE_PROMPT =
+  "What's your phone number? (optional)";
+const BOOKING_CANCELLED_TEXT =
+  "Booking cancelled. Send /reserve to start again.";
+
+let bookingPool: pg.Pool | undefined;
 
 function mainMenuKeyboard() {
   return {
@@ -90,6 +114,32 @@ function todayUtc(): Date {
   return startOfDay(new Date());
 }
 
+function clearReservationProgress(session: SessionData): void {
+  session.reservationDate = undefined;
+  session.partySize = undefined;
+  session.awaitingPartySize = false;
+  session.availableSlots = undefined;
+  session.slotPage = undefined;
+  session.selectedSlot = undefined;
+  session.guestName = undefined;
+  session.guestPhone = undefined;
+  session.assignedTableIds = undefined;
+  session.reservationStep = undefined;
+}
+
+function getBookingPool(): pg.Pool | null {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    return null;
+  }
+
+  if (!bookingPool) {
+    bookingPool = new pg.Pool({ connectionString: databaseUrl });
+  }
+
+  return bookingPool;
+}
+
 async function sendCalendar(
   ctx: BotContext,
   year: number,
@@ -118,6 +168,10 @@ async function showAvailabilityForParty(
   ctx.session.partySize = partySize;
   ctx.session.awaitingPartySize = false;
   ctx.session.selectedSlot = undefined;
+  ctx.session.guestName = undefined;
+  ctx.session.guestPhone = undefined;
+  ctx.session.assignedTableIds = undefined;
+  ctx.session.reservationStep = undefined;
 
   const dateLabel = formatSelectedDate(reservationDate);
   const result = calculateAvailability(partySize, undefined, {
@@ -170,6 +224,119 @@ async function showSlotPage(ctx: BotContext, page: number): Promise<void> {
   });
 }
 
+async function askGuestName(ctx: BotContext): Promise<void> {
+  ctx.session.reservationStep = "guest_name";
+  await ctx.reply(GUEST_NAME_PROMPT, {
+    reply_markup: buildGuestSkipKeyboard(),
+  });
+}
+
+async function askGuestPhone(ctx: BotContext): Promise<void> {
+  ctx.session.reservationStep = "guest_phone";
+  await ctx.reply(GUEST_PHONE_PROMPT, {
+    reply_markup: buildGuestSkipKeyboard(),
+  });
+}
+
+async function showConfirmationSummary(ctx: BotContext): Promise<void> {
+  const reservationDate = sessionString(ctx.session.reservationDate);
+  const partySize = sessionNumber(ctx.session.partySize);
+  const slot = sessionString(ctx.session.selectedSlot);
+  const assignedTableIds = sessionStringArray(ctx.session.assignedTableIds);
+
+  if (!reservationDate || !partySize || !slot || !assignedTableIds) {
+    await ctx.reply("Please restart your reservation with /reserve.");
+    return;
+  }
+
+  const assignment = assignTables(partySize);
+  const tableSummary = assignment
+    ? formatTableAssignment(assignment)
+    : assignedTableIds.join(", ");
+
+  ctx.session.reservationStep = "confirm";
+  await ctx.reply(
+    formatConfirmationSummary({
+      dateLabel: formatSelectedDate(reservationDate),
+      slot,
+      partySize,
+      tableSummary,
+      guestName: sessionString(ctx.session.guestName),
+      guestPhone: sessionString(ctx.session.guestPhone),
+    }),
+    { reply_markup: buildConfirmKeyboard() }
+  );
+}
+
+async function persistBooking(
+  ctx: BotContext,
+  refCode: string,
+  startDt: Date,
+  endDt: Date
+): Promise<void> {
+  const pool = getBookingPool();
+  if (!pool) {
+    return;
+  }
+
+  const partySize = sessionNumber(ctx.session.partySize);
+  const assignedTableIds = sessionStringArray(ctx.session.assignedTableIds);
+  if (!partySize || !assignedTableIds) {
+    return;
+  }
+
+  try {
+    await saveBooking(pool, {
+      refCode,
+      guestName: sessionString(ctx.session.guestName) ?? null,
+      guestPhone: sessionString(ctx.session.guestPhone) ?? null,
+      guestTelegramId: ctx.from?.id ?? null,
+      partySize,
+      startDt,
+      endDt,
+      assignedTableIds,
+    });
+  } catch (error) {
+    console.error("Failed to save booking:", error);
+  }
+}
+
+async function completeBooking(ctx: BotContext): Promise<void> {
+  const reservationDate = sessionString(ctx.session.reservationDate);
+  const partySize = sessionNumber(ctx.session.partySize);
+  const slot = sessionString(ctx.session.selectedSlot);
+  const assignedTableIds = sessionStringArray(ctx.session.assignedTableIds);
+  const userId = ctx.from?.id;
+
+  if (!reservationDate || !partySize || !slot || !assignedTableIds || !userId) {
+    await ctx.reply("Please restart your reservation with /reserve.");
+    return;
+  }
+
+  const assignment = assignTables(partySize);
+  const tableSummary = assignment
+    ? formatTableAssignment(assignment)
+    : assignedTableIds.join(", ");
+  const refCode = generateRefCode(reservationDate, slot, userId);
+  const { startDt, endDt } = buildBookingDatetime(reservationDate, slot);
+
+  await persistBooking(ctx, refCode, startDt, endDt);
+
+  await ctx.reply(
+    formatBookingConfirmation({
+      refCode,
+      dateLabel: formatSelectedDate(reservationDate),
+      slot,
+      partySize,
+      tableSummary,
+      guestName: sessionString(ctx.session.guestName),
+      guestPhone: sessionString(ctx.session.guestPhone),
+    })
+  );
+
+  clearReservationProgress(ctx.session);
+}
+
 export function buildBot(token: string): ReturnType<typeof createBot> {
   const bot = createBot({ token });
 
@@ -186,12 +353,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
 
   bot.command("reserve", async (ctx: BotContext) => {
     const today = todayUtc();
-    ctx.session.reservationDate = undefined;
-    ctx.session.partySize = undefined;
-    ctx.session.awaitingPartySize = false;
-    ctx.session.availableSlots = undefined;
-    ctx.session.slotPage = undefined;
-    ctx.session.selectedSlot = undefined;
+    clearReservationProgress(ctx.session);
     await sendCalendar(ctx, today.getUTCFullYear(), today.getUTCMonth());
   });
 
@@ -241,6 +403,10 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       ctx.session.availableSlots = undefined;
       ctx.session.slotPage = undefined;
       ctx.session.selectedSlot = undefined;
+      ctx.session.guestName = undefined;
+      ctx.session.guestPhone = undefined;
+      ctx.session.assignedTableIds = undefined;
+      ctx.session.reservationStep = undefined;
       await ctx.editMessageText(
         `Date selected: ${formatSelectedDate(isoDate)}`
       );
@@ -331,11 +497,71 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     }
 
     ctx.session.selectedSlot = slot;
+    ctx.session.assignedTableIds = assignment.tables.map((table) => table.id);
     const tableSummary = formatTableAssignment(assignment);
     await ctx.editMessageText(
       formatSlotSelection(slot, partySize, tableSummary)
     );
+    await askGuestName(ctx);
     await ctx.answerCallbackQuery({ text: "Time selected" });
+  });
+
+  bot.callbackQuery(/^guest:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data !== "guest:skip") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const step = ctx.session.reservationStep;
+    if (step === "guest_name") {
+      ctx.session.guestName = undefined;
+      await ctx.answerCallbackQuery({ text: "Skipped" });
+      await askGuestPhone(ctx);
+      return;
+    }
+
+    if (step === "guest_phone") {
+      ctx.session.guestPhone = undefined;
+      await ctx.answerCallbackQuery({ text: "Skipped" });
+      await showConfirmationSummary(ctx);
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^confirm:/, async (ctx: BotContext) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (ctx.session.reservationStep !== "confirm") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data === "confirm:yes") {
+      await completeBooking(ctx);
+      await ctx.answerCallbackQuery({ text: "Booking confirmed" });
+      return;
+    }
+
+    if (data === "confirm:no") {
+      clearReservationProgress(ctx.session);
+      await ctx.editMessageText(BOOKING_CANCELLED_TEXT);
+      await ctx.answerCallbackQuery({ text: "Booking cancelled" });
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
   });
 
   bot.on("message", async (ctx: BotContext) => {
@@ -352,6 +578,30 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       }
 
       await showAvailabilityForParty(ctx, size, false);
+      return;
+    }
+
+    if (ctx.session.reservationStep === "guest_name") {
+      const name = text.trim();
+      if (name.length < 1) {
+        await ctx.reply("Please enter a name or tap Skip.");
+        return;
+      }
+
+      ctx.session.guestName = name;
+      await askGuestPhone(ctx);
+      return;
+    }
+
+    if (ctx.session.reservationStep === "guest_phone") {
+      const phone = text.trim();
+      if (phone.length < 1) {
+        await ctx.reply("Please enter a phone number or tap Skip.");
+        return;
+      }
+
+      ctx.session.guestPhone = phone;
+      await showConfirmationSummary(ctx);
       return;
     }
 
