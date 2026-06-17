@@ -41,6 +41,7 @@ import {
 } from "./admin/notifications.js";
 import { registerSetupHandlers } from "./admin/setup.js";
 import { registerConfigHandlers, handleConfigMessage } from "./admin/config.js";
+import { registerExportHandlers } from "./admin/export.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
 import {
@@ -428,6 +429,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
   registerBookingsTodayHandlers(bot);
   registerBookingsHandlers(bot);
   registerCapacityTodayHandlers(bot);
+  registerExportHandlers(bot);
   registerReminderHandlers(bot, getBookingPool);
 
   bot.command("__harness_error__", async () => {
