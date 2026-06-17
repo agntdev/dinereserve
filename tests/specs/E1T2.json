@@ -1,0 +1,116 @@
+[
+  {
+    "name": "E1T2: date selection prompts for party size",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Date selected: Saturday, June 20, 2026"
+            }
+          },
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "How many guests? Pick a quick option or type a number."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T2: party size button calculates availability",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:4", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "4 guests on Saturday, June 20, 2026:\n39 time slots available."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T2: typed party size calculates availability",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:type", "messageId": 2 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Type the number of guests (1-99):"
+            }
+          }
+        ]
+      },
+      {
+        "send": { "text": "5" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "5 guests on Saturday, June 20, 2026:\n39 time slots available."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T2: oversized party reports capacity limit",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "party:type", "messageId": 2 },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "text": "20" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "20 guests on Saturday, June 20, 2026:\nSorry, our largest seating is 16 guests. Please contact the restaurant for special requests."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

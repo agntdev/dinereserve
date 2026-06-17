@@ -93,6 +93,42 @@ export function buildCalendarKeyboard(
   return { inline_keyboard: rows };
 }
 
+const PARTY_SIZE_OPTIONS = [2, 4, 6, 8];
+
+export function buildPartySizeKeyboard(): {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+} {
+  const quickButtons = PARTY_SIZE_OPTIONS.map((size) => ({
+    text: String(size),
+    callback_data: `party:${size}`,
+  }));
+
+  return {
+    inline_keyboard: [
+      quickButtons.slice(0, 2),
+      quickButtons.slice(2, 4),
+      [{ text: "Type a number", callback_data: "party:type" }],
+    ],
+  };
+}
+
+export const PARTY_SIZE_PROMPT =
+  "How many guests? Pick a quick option or type a number.";
+
+export function parsePartySizeInput(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  const size = Number.parseInt(trimmed, 10);
+  if (size < 1 || size > 99) {
+    return null;
+  }
+
+  return size;
+}
+
 export function formatSelectedDate(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
