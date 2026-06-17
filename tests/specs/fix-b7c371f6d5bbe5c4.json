@@ -1,0 +1,46 @@
+[
+  {
+    "name": "/setup without a table count shows usage",
+    "steps": [
+      {
+        "send": { "text": "/setup" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Usage: /setup <number-of-tables> (1-100)" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/setup with an invalid count shows usage",
+    "steps": [
+      {
+        "send": { "text": "/setup abc" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Usage: /setup <number-of-tables> (1-100)" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/setup with zero count shows usage",
+    "steps": [
+      {
+        "send": { "text": "/setup 0" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Usage: /setup <number-of-tables> (1-100)" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/setup with valid count but no DB shows error",
+    "steps": [
+      {
+        "send": { "text": "/setup 5" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Setup failed: No DATABASE_URL set — cannot persist setup" } }
+        ]
+      }
+    ]
+  }
+]

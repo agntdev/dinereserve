@@ -13,6 +13,8 @@ import {
   type PendingReminder,
 } from "./reminders.js";
 
+import { persistSetup } from "./admin/setup.js";
+
 export interface Session {
   step?: "awaiting_date" | "awaiting_party_size" | "awaiting_slot";
   reservationDate?: string;
@@ -29,6 +31,23 @@ export function buildBot(token: string) {
 
   bot.command("start", async (ctx) => {
     await ctx.reply("Welcome! I am ready to help.");
+  });
+
+  bot.command("setup", async (ctx) => {
+    const arg = (ctx.match ?? "").trim();
+    const count = parseInt(arg, 10);
+
+    if (isNaN(count) || count < 1 || count > 100) {
+      await ctx.reply("Usage: /setup <number-of-tables> (1-100)");
+      return;
+    }
+
+    try {
+      await persistSetup(count);
+      await ctx.reply(`Restaurant configured with ${count} tables.`);
+    } catch (err: any) {
+      await ctx.reply(`Setup failed: ${err.message}`);
+    }
   });
 
   bot.command("reserve", async (ctx) => {
