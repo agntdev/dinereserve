@@ -13,6 +13,7 @@ import {
   PARTY_SIZE_PROMPT,
   startOfDay,
 } from "./reserve.js";
+import { registerSetupHandlers } from "./admin/setup.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
 
@@ -36,6 +37,7 @@ const HELP_TEXT =
   "/reserve — Book a table\n" +
   "/help — Show this command list\n\n" +
   "Admin commands (owners only):\n" +
+  "/setup — Initial restaurant setup\n" +
   "/bookings_today — Today's bookings\n" +
   "/bookings — Bookings for a date\n" +
   "/capacity_today — Today's capacity\n" +
@@ -188,6 +190,8 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
     ctx.session.selectedSlot = undefined;
     await sendCalendar(ctx, today.getUTCFullYear(), today.getUTCMonth());
   });
+
+  registerSetupHandlers(bot);
 
   bot.command("__harness_error__", async () => {
     throw new Error("Harness error simulation");
