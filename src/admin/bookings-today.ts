@@ -4,6 +4,7 @@ import { getRepository } from "../db/index.js";
 import { getPool } from "../db/pool.js";
 import type { BookingRow, BookingStatus } from "../db/types.js";
 import { startOfDay } from "../reserve.js";
+import { notifyAdminsOfCancellation } from "./notifications.js";
 import { isAdmin } from "./auth.js";
 
 const ACCESS_DENIED = "This command is only available to restaurant staff.";
@@ -168,6 +169,10 @@ export function registerBookingsTodayHandlers(bot: Bot<BotContext>): void {
       if (!updated) {
         await ctx.answerCallbackQuery({ text: "Booking not found." });
         return;
+      }
+
+      if (newStatus === "cancelled") {
+        await notifyAdminsOfCancellation(ctx.api, refCode);
       }
 
       const todayLabel = formatTodayLabel();

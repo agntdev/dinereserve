@@ -32,6 +32,11 @@ import {
   startOfDay,
 } from "./reserve.js";
 import { registerBookingsTodayHandlers } from "./admin/bookings-today.js";
+import {
+  notifyAdminsOfCancellation,
+  notifyAdminsOfNewBooking,
+  notifyAdminsOfReschedule,
+} from "./admin/notifications.js";
 import { registerSetupHandlers } from "./admin/setup.js";
 import { buildSlotKeyboard, formatSlotSelection } from "./slots.js";
 import { assignTables, formatTableAssignment } from "./tables.js";
@@ -339,6 +344,7 @@ async function completeBooking(ctx: BotContext): Promise<void> {
 
   const rescheduling = ctx.session.rescheduling === true;
   const previousRefCode = sessionString(ctx.session.activeRefCode);
+  const wasReschedule = rescheduling && Boolean(previousRefCode);
 
   if (rescheduling && previousRefCode) {
     const pool = getBookingPool();
@@ -377,6 +383,16 @@ async function completeBooking(ctx: BotContext): Promise<void> {
     formatBookingConfirmation(reminderDetails),
     { reply_markup: buildBookingActionKeyboard(refCode) }
   );
+
+  if (wasReschedule && previousRefCode) {
+    await notifyAdminsOfReschedule(
+      ctx.api,
+      previousRefCode,
+      reminderDetails
+    );
+  } else {
+    await notifyAdminsOfNewBooking(ctx.api, reminderDetails);
+  }
 
   clearReservationProgress(ctx.session);
   ctx.session.activeRefCode = refCode;
@@ -605,6 +621,7 @@ export function buildBot(token: string): ReturnType<typeof createBot> {
       ctx.session.rescheduling = false;
       ctx.session.pendingReminder = undefined;
       await ctx.editMessageText(formatBookingCancelled(refCode));
+      await notifyAdminsOfCancellation(ctx.api, refCode);
       await ctx.answerCallbackQuery({ text: "Booking cancelled" });
       return;
     }
