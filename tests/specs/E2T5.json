@@ -1,0 +1,34 @@
+[
+  {
+    "name": "E2T5: non-admin /export gets access denied",
+    "steps": [
+      {
+        "send": { "text": "/export 2026-06-17" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "This command is only available to restaurant staff."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T5: non-admin export range gets access denied",
+    "steps": [
+      {
+        "send": { "text": "/export 2026-06-01..2026-06-30" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "This command is only available to restaurant staff."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
