@@ -1,0 +1,60 @@
+[
+  {
+    "name": "E1T1: /reserve shows date calendar",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Pick a date for your reservation:"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T1: selecting a date confirms the choice",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:date:2026-06-20", "messageId": 1 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Date selected: Saturday, June 20, 2026"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E1T1: calendar month navigation updates the picker",
+    "steps": [
+      {
+        "send": { "text": "/reserve" },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "cal:next:2026-07", "messageId": 1 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Pick a date for your reservation:"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]
