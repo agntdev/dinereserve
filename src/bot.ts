@@ -2,7 +2,7 @@ import type { Context } from "grammy";
 import type { SessionFlavor } from "grammy";
 import { createBot } from "./toolkit/index.js";
 import type { BookingRow } from "./db/types.js";
-import { listOverlapping } from "./db/repository.js";
+import { listOverlapping, getRestaurantConfig } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
 import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
 import { persistBooking } from "./booking.js";
@@ -189,7 +189,8 @@ async function showAvailabilityForParty(
   partySize: number,
   reservationDate: string,
 ): Promise<TimeSlot[]> {
-  const allSlots = generateSlotsForDate(reservationDate, DEFAULT_RESTAURANT_CONFIG);
+  const config = await getRestaurantConfig();
+  const allSlots = generateSlotsForDate(reservationDate, config ?? DEFAULT_RESTAURANT_CONFIG);
 
   let overlapping: BookingRow[];
   try {
@@ -204,5 +205,5 @@ async function showAvailabilityForParty(
 
   return calculateAvailability(partySize, overlapping, {
     isoDate: reservationDate,
-  });
+  }, config ?? DEFAULT_RESTAURANT_CONFIG);
 }

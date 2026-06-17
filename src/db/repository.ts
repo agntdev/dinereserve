@@ -1,5 +1,7 @@
 import { getBookingPool } from "../toolkit/index.js";
 import type { BookingRow } from "./types.js";
+import type { RestaurantConfig, RestaurantTable } from "../config.js";
+import { DEFAULT_RESTAURANT_CONFIG } from "../config.js";
 
 export function mapBookingRow(row: Record<string, unknown>): BookingRow {
   return {
@@ -63,4 +65,43 @@ export async function saveBooking(booking: {
   );
 
   return mapBookingRow(result.rows[0]);
+}
+
+export async function getRestaurantConfig(): Promise<RestaurantConfig | null> {
+  const pool = getBookingPool();
+  if (!pool) return null;
+
+  const configResult = await pool.query<Record<string, unknown>>(
+    `SELECT key, value FROM configs`
+  );
+
+  if (configResult.rows.length === 0) return null;
+
+  const configMap = new Map<string, string>();
+  for (const row of configResult.rows) {
+    configMap.set(row.key as string, row.value as string);
+  }
+
+  const tablesResult = await pool.query<Record<string, unknown>>(
+    `SELECT id, capacity FROM restaurant_tables ORDER BY id`
+  );
+
+  const tables: RestaurantTable[] = tablesResult.rows.map((row) => ({
+    id: row.id as string,
+    capacity: row.capacity as number,
+  }));
+
+  const openingHour = parseInt(configMap.get("opening_hour") ?? "", 10);
+  const closingHour = parseInt(configMap.get("closing_hour") ?? "", 10);
+  const slotIntervalMinutes = parseInt(configMap.get("slot_interval_minutes") ?? "", 10);
+
+  return {
+    timezone: configMap.get("timezone") ?? DEFAULT_RESTAURANT_CONFIG.timezone,
+    openingHour: isNaN(openingHour) ? DEFAULT_RESTAURANT_CONFIG.openingHour : openingHour,
+    closingHour: isNaN(closingHour) ? DEFAULT_RESTAURANT_CONFIG.closingHour : closingHour,
+    tables: tables.length > 0 ? tables : DEFAULT_RESTAURANT_CONFIG.tables,
+    slotIntervalMinutes: isNaN(slotIntervalMinutes)
+      ? DEFAULT_RESTAURANT_CONFIG.slotIntervalMinutes
+      : slotIntervalMinutes,
+  };
 }
