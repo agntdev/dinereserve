@@ -4,6 +4,7 @@ import { createBot } from "./toolkit/index.js";
 import { listOverlapping } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
 import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
+import { persistBooking } from "./booking.js";
 
 export interface Session {
   step?: "awaiting_date" | "awaiting_party_size" | "awaiting_slot";
@@ -122,9 +123,31 @@ export function buildBot(token: string) {
         return await handleSlotSelection(ctx as MyContext);
       }
 
-      await ctx.reply(
-        `Booking confirmed for ${ctx.session.partySize} people on ${ctx.session.reservationDate} at ${selected.start}–${selected.end}.`
-      );
+      const userId = ctx.from?.id ?? 0;
+      const guestName =
+        [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") ||
+        `User ${userId}`;
+
+      const result = await persistBooking({
+        user_id: userId,
+        guest_name: guestName,
+        party_size: ctx.session.partySize!,
+        iso_date: ctx.session.reservationDate!,
+        slot_start: selected.start,
+        slot_end: selected.end,
+        status: "confirmed",
+      });
+
+      if (result.success) {
+        await ctx.reply(
+          `Booking confirmed! Your reference code is ${result.ref_code}. ` +
+            `${ctx.session.partySize} people on ${ctx.session.reservationDate} at ${selected.start}–${selected.end}.`
+        );
+      } else {
+        await ctx.reply(
+          `Sorry, we couldn't complete your booking at this time. Please try again.`
+        );
+      }
 
       ctx.session.step = undefined;
       ctx.session.reservationDate = undefined;
