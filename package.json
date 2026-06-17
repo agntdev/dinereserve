@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/db-migrate.ts --seed",
-    "test:unit": "tsx tests/unit/availability-slots.test.ts"
+    "test:unit": "tsx tests/unit/availability-slots.test.ts && tsx tests/unit/table-assignment.test.ts"
   },
   "dependencies": {
     "@agntdev/bot-toolkit": "*",
