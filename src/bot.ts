@@ -4,7 +4,7 @@ import { createBot } from "./toolkit/index.js";
 import type { BookingRow } from "./db/types.js";
 import { listOverlapping, getReminderOffsetMinutes } from "./db/repository.js";
 import { calculateAvailability, generateSlotsForDate, type TimeSlot } from "./availability/slots.js";
-import { DEFAULT_RESTAURANT_CONFIG } from "./config.js";
+import { getRestaurantConfig } from "./db/config-store.js";
 import { persistBooking } from "./booking.js";
 import {
   buildPendingReminder,
@@ -258,7 +258,8 @@ async function showAvailabilityForParty(
   partySize: number,
   reservationDate: string,
 ): Promise<TimeSlot[]> {
-  const allSlots = generateSlotsForDate(reservationDate, DEFAULT_RESTAURANT_CONFIG);
+  const config = await getRestaurantConfig();
+  const allSlots = generateSlotsForDate(reservationDate, config);
 
   let overlapping: BookingRow[];
   try {
@@ -273,5 +274,5 @@ async function showAvailabilityForParty(
 
   return calculateAvailability(partySize, overlapping, {
     isoDate: reservationDate,
-  });
+  }, config);
 }
