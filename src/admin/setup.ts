@@ -7,11 +7,39 @@ export async function persistSetup(setupTableCount: number): Promise<void> {
   }
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS configs (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS restaurant_tables (
       id INTEGER PRIMARY KEY,
       capacity INTEGER NOT NULL DEFAULT 4
     )
   `);
+
+  await pool.query(
+    `INSERT INTO configs (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    ["timezone", "UTC"]
+  );
+  await pool.query(
+    `INSERT INTO configs (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    ["opening_hour", "11"]
+  );
+  await pool.query(
+    `INSERT INTO configs (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    ["closing_hour", "22"]
+  );
+  await pool.query(
+    `INSERT INTO configs (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    ["slot_interval_minutes", "30"]
+  );
 
   for (let i = 1; i <= setupTableCount; i++) {
     await pool.query(
