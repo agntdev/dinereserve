@@ -1,0 +1,24 @@
+[
+  {
+    "name": "/setup completion message does not prompt to save already-saved settings",
+    "steps": [
+      {
+        "send": { "text": "/setup 5" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Setup failed: No DATABASE_URL set — cannot persist setup" } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "/setup invalid input shows usage, no misleading prompt",
+    "steps": [
+      {
+        "send": { "text": "/setup" },
+        "expect": [
+          { "method": "sendMessage", "payload": { "text": "Usage: /setup <number-of-tables> (1-100)" } }
+        ]
+      }
+    ]
+  }
+]
